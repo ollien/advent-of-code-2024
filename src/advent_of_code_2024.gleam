@@ -25,7 +25,7 @@ fn run_command(run: fn(String) -> Result(Nil, String)) -> glint.Command(Nil) {
   let filename = filename_arg(named)
   case run_with_file(filename, run) {
     Ok(Nil) -> Nil
-    Error(err) -> io.print_error(colours.fgmaroon("error") <> ": " <> err)
+    Error(err) -> io.println_error(colours.fgmaroon("error") <> ": " <> err)
   }
 }
 
