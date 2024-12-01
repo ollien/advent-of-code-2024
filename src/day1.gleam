@@ -95,10 +95,9 @@ fn list_to_location_pair(items: List(Int)) -> Result(LocationPair, String) {
 fn count(haystack: List(a)) -> dict.Dict(a, Int) {
   list.fold(haystack, from: dict.new(), with: fn(counts, item) {
     dict.upsert(counts, item, fn(existing_count) {
-      case existing_count {
-        option.None -> 1
-        option.Some(existing_count) -> existing_count + 1
-      }
+      existing_count
+      |> option.map(fn(count) { count + 1 })
+      |> option.unwrap(or: 1)
     })
   })
 }
