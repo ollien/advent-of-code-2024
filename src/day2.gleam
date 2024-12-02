@@ -1,9 +1,11 @@
 import advent_of_code_2024
+import gleam/bool
 import gleam/int
 import gleam/io
 import gleam/list
 import gleam/result
 import gleam/string
+import gleam/yielder
 
 type Report {
   Report(levels: List(Int))
@@ -17,12 +19,19 @@ fn run(raw_input: String) -> Result(Nil, String) {
   use parsed_input <- result.try(parse_input(raw_input))
 
   io.println("Part 1: " <> part1(parsed_input))
+  io.println("Part 2: " <> part2(parsed_input))
   Ok(Nil)
 }
 
 fn part1(input: List(Report)) -> String {
   input
   |> list.count(is_report_safe)
+  |> int.to_string()
+}
+
+fn part2(input: List(Report)) -> String {
+  input
+  |> list.count(can_report_be_made_safe)
   |> int.to_string()
 }
 
@@ -44,6 +53,32 @@ fn is_report_safe(report: Report) -> Bool {
         })
 
       { all_positive || all_negative } && all_in_tolerance
+    }
+  }
+}
+
+fn can_report_be_made_safe(report: Report) -> Bool {
+  case report, is_report_safe(report) {
+    Report(levels: []), _any -> True
+    Report(levels: [_one]), _any -> True
+    Report(levels: _any), True -> True
+    Report(levels:), False -> {
+      yielder.range(from: 0, to: list.length(levels) - 1)
+      |> yielder.map(fn(index_to_drop) {
+        Report(levels: drop_at(levels, index_to_drop))
+      })
+      |> yielder.any(is_report_safe)
+    }
+  }
+}
+
+// drops at the given index, if it is in bounds. Otherwise returns the list itself
+fn drop_at(list: List(a), idx: Int) -> List(a) {
+  use <- bool.guard(list.length(list) <= 1, list)
+  case list.split(list, idx) {
+    #(half1, []) -> half1
+    #(half1, [_drop, ..half2]) -> {
+      list.flatten([half1, half2])
     }
   }
 }
