@@ -58,25 +58,20 @@ fn is_report_safe(report: Report) -> Bool {
 }
 
 fn can_report_be_made_safe(report: Report) -> Bool {
-  case report, is_report_safe(report) {
-    Report(levels: []), _any -> True
-    Report(levels: [_one]), _any -> True
-    Report(levels: _any), True -> True
-    Report(levels:), False -> {
-      yielder.range(from: 0, to: list.length(levels) - 1)
-      |> yielder.map(fn(index_to_drop) {
-        Report(levels: drop_at(levels, index_to_drop))
-      })
-      |> yielder.any(is_report_safe)
-    }
-  }
+  use <- bool.guard(when: is_report_safe(report), return: True)
+
+  yielder.range(from: 0, to: list.length(report.levels) - 1)
+  |> yielder.map(fn(index_to_drop) {
+    Report(levels: drop_at(report.levels, index_to_drop))
+  })
+  |> yielder.any(is_report_safe)
 }
 
 // drops at the given index, if it is in bounds. Otherwise returns the list itself
 fn drop_at(list: List(a), idx: Int) -> List(a) {
   let length = list.length(list)
-  use <- bool.guard(length <= 1 && idx <= 1, [])
-  use <- bool.guard(length <= 1, list)
+  use <- bool.guard(when: length <= 1 && idx <= 1, return: [])
+  use <- bool.guard(when: length <= 1, return: list)
 
   case list.split(list, idx) {
     #(half1, []) -> half1
