@@ -74,7 +74,10 @@ fn can_report_be_made_safe(report: Report) -> Bool {
 
 // drops at the given index, if it is in bounds. Otherwise returns the list itself
 fn drop_at(list: List(a), idx: Int) -> List(a) {
-  use <- bool.guard(list.length(list) <= 1, list)
+  let length = list.length(list)
+  use <- bool.guard(length <= 1 && idx <= 1, [])
+  use <- bool.guard(length <= 1, list)
+
   case list.split(list, idx) {
     #(half1, []) -> half1
     #(half1, [_drop, ..half2]) -> {
