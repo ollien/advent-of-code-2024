@@ -99,10 +99,12 @@ fn do_parse_instructions(
 
   case parse_next_instruction(input) {
     Ok(output) -> do_parse_instructions(output.rest, [output.parsed, ..acc])
-    Error(ParseError) ->
-      input
-      |> string.drop_start(1)
-      |> do_parse_instructions(acc)
+    Error(ParseError) -> {
+      // This is much faster than drop_start(1)
+      let #(_head, rest) =
+        string.pop_grapheme(input) |> result.unwrap(or: #("", ""))
+      do_parse_instructions(rest, acc)
+    }
   }
 }
 
