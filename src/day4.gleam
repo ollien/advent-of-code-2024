@@ -23,7 +23,7 @@ type DirectedPosition {
 }
 
 type WordSearch {
-  WordSearch(height: Int, width: Int, letters: dict.Dict(Position, String))
+  WordSearch(letters: dict.Dict(Position, String))
 }
 
 fn run(input: String) -> Result(Nil, String) {
@@ -179,16 +179,6 @@ fn starting_positions(
 }
 
 fn build_word_search(input: String) -> WordSearch {
-  let letters = build_word_search_letters(input)
-
-  WordSearch(
-    letters:,
-    height: find_dimension(letters, fn(pos) { pos.row }),
-    width: find_dimension(letters, fn(pos) { pos.column }),
-  )
-}
-
-fn build_word_search_letters(input: String) -> dict.Dict(Position, String) {
   input
   |> string.trim_end()
   |> string.split("\n")
@@ -199,16 +189,5 @@ fn build_word_search_letters(input: String) -> dict.Dict(Position, String) {
       dict.insert(letters, Position(row: row_idx, column: col_idx), char)
     })
   })
-}
-
-fn find_dimension(
-  letters: dict.Dict(Position, a),
-  extract_dim: fn(Position) -> Int,
-) -> Int {
-  letters
-  |> dict.keys()
-  |> list.map(extract_dim)
-  |> list.reduce(int.max)
-  |> result.map(fn(max_index) { max_index + 1 })
-  |> result.unwrap(or: 0)
+  |> WordSearch()
 }
