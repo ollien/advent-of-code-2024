@@ -42,7 +42,7 @@ fn part1(word_search: WordSearch) -> String {
       DirectedPosition(position: position, direction:)
     })
   })
-  |> list.filter(fn(directed) { word_at(word_search, "XMAS", directed) })
+  |> list.filter(fn(directed) { is_word_at(word_search, "XMAS", directed) })
   |> list.length()
   |> int.to_string()
 }
@@ -55,12 +55,12 @@ fn part2(word_search: WordSearch) -> String {
   |> int.to_string()
 }
 
-fn word_at(
+fn is_word_at(
   word_search: WordSearch,
   word: String,
   start_at: DirectedPosition,
 ) -> Bool {
-  do_word_at(
+  do_is_word_at(
     in: word_search,
     at: start_at.position,
     in_direction: start_at.direction,
@@ -69,7 +69,7 @@ fn word_at(
   )
 }
 
-fn do_word_at(
+fn do_is_word_at(
   in word_search: WordSearch,
   at position: Position,
   in_direction direction: Vector,
@@ -81,7 +81,7 @@ fn do_word_at(
   case dict.get(word_search.letters, position) {
     Ok(letter) if letter == next -> {
       let next_position = add_vector_to(position, direction)
-      do_word_at(
+      do_is_word_at(
         in: word_search,
         at: next_position,
         in_direction: direction,
@@ -115,7 +115,7 @@ fn is_x_shaped_mas(word_search: WordSearch, position: Position) -> Bool {
 
   case m_directed_positions {
     [m1, m2] -> {
-      word_at(word_search, "MAS", m1) && word_at(word_search, "MAS", m2)
+      is_word_at(word_search, "MAS", m1) && is_word_at(word_search, "MAS", m2)
     }
 
     _ -> False
