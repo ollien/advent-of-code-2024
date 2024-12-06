@@ -119,24 +119,16 @@ fn do_run_simulation(
   let guard_position_candidate =
     move_in_direction(guard.position, guard.direction)
 
-  case set.contains(map.obstacles, guard_position_candidate) {
-    True -> {
-      let next_map =
-        Map(
-          ..map,
-          guard: Guard(..guard, direction: rotate_90deg(guard.direction)),
-        )
-
-      do_run_simulation(next_map, can_continue, guard_positions)
-    }
-
-    False -> {
-      let next_map =
-        Map(..map, guard: Guard(..guard, position: guard_position_candidate))
-
-      do_run_simulation(next_map, can_continue, guard_positions)
-    }
+  let next_guard = case set.contains(map.obstacles, guard_position_candidate) {
+    True -> Guard(..guard, direction: rotate_90deg(guard.direction))
+    False -> Guard(..guard, position: guard_position_candidate)
   }
+
+  do_run_simulation(
+    Map(..map, guard: next_guard),
+    can_continue,
+    guard_positions,
+  )
 }
 
 fn continue_simulation(
