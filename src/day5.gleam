@@ -35,18 +35,26 @@ pub fn main() {
 fn run(input: String) -> Result(Nil, String) {
   use input <- result.try(parse_input(input))
   let adjacencies = build_adjacencies(input.rules)
-  let #(valid_updates, invalid_updates) =
-    list.partition(input.updates, fn(update) {
-      is_update_valid(adjacencies, update)
+
+  let #(valid_updates, fixed_updates) =
+    input.updates
+    |> list.map(fn(update) { #(update, make_valid_update(adjacencies, update)) })
+    |> list.fold(from: #([], []), with: fn(acc, pair) {
+      let #(original, fixed) = pair
+      let #(valid, invalid) = acc
+      case original == fixed {
+        True -> #([original, ..valid], invalid)
+        False -> #(valid, [fixed, ..invalid])
+      }
     })
 
-  io.println("Part 1: " <> part1(valid_updates))
-  io.println("Part 2: " <> part2(adjacencies, invalid_updates))
+  io.println("Part 1: " <> calculate_middle_sum(valid_updates))
+  io.println("Part 2: " <> calculate_middle_sum(fixed_updates))
 
   Ok(Nil)
 }
 
-fn part1(valid_updates: List(Update)) -> String {
+fn calculate_middle_sum(valid_updates: List(Update)) -> String {
   valid_updates
   |> list.map(fn(update) {
     // These lists are guaranteed to be non-empty by our input parser
@@ -55,31 +63,6 @@ fn part1(valid_updates: List(Update)) -> String {
   })
   |> int.sum()
   |> int.to_string()
-}
-
-fn part2(adjacencies: Adjacencies, invalid_updates: List(Update)) -> String {
-  invalid_updates
-  |> list.map(fn(update) { make_valid_update(adjacencies, update) })
-  |> part1()
-}
-
-fn is_update_valid(adjacencies: Adjacencies, update: Update) -> Bool {
-  do_is_update_valid(adjacencies, update.pages)
-}
-
-fn do_is_update_valid(adjacencies: Adjacencies, remaining: List(Page)) -> Bool {
-  use first, remaining <- try_pop(remaining, or: True)
-  let all_after = set.from_list(remaining)
-  let must_after =
-    adjacencies
-    |> dict.get(first)
-    |> result.unwrap(or: set.new())
-
-  let extraneous_after = set.difference(all_after, must_after)
-  case set.is_empty(extraneous_after) {
-    True -> do_is_update_valid(adjacencies, remaining)
-    False -> False
-  }
 }
 
 fn make_valid_update(adjacencies: Adjacencies, update: Update) -> Update {
@@ -96,22 +79,29 @@ fn compare_pages(
   left: Page,
   right: Page,
 ) -> order.Order {
-  dict.get(adjacencies, left)
-  |> result.map(fn(left_adj) {
-    case set.contains(left_adj, right) {
-      True -> order.Lt
-      False -> order.Gt
-    }
-  })
-  |> result.lazy_or(fn() {
-    dict.get(adjacencies, right)
+  // Must check both directions; what you don't want is an item that has no element that must come after it
+  // but does have one that must come before it
+  let left_order =
+    adjacencies
+    |> dict.get(left)
+    |> result.map(fn(left_adj) {
+      case set.contains(left_adj, right) {
+        True -> order.Lt
+        False -> order.Gt
+      }
+    })
+
+  let right_order =
+    adjacencies
+    |> dict.get(right)
     |> result.map(fn(right_adj) {
       case set.contains(right_adj, left) {
         True -> order.Gt
         False -> order.Lt
       }
     })
-  })
+
+  result.or(left_order, right_order)
   |> result.unwrap(or: order.Eq)
 }
 
@@ -194,13 +184,4 @@ fn parse_int(s: String) -> Result(Int, String) {
   s
   |> int.parse()
   |> result.map_error(fn(_nil) { "Malformed int " <> s })
-}
-
-fn try_pop(list list: List(a), or or: b, next next: fn(a, List(a)) -> b) -> b {
-  case list {
-    [] -> or
-    [head, ..rest] -> {
-      next(head, rest)
-    }
-  }
 }
