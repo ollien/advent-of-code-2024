@@ -41,10 +41,10 @@ fn run(input: String) -> Result(Nil, String) {
     |> list.map(fn(update) { #(update, make_valid_update(adjacencies, update)) })
     |> list.fold(from: #([], []), with: fn(acc, pair) {
       let #(original, fixed) = pair
-      let #(valid, invalid) = acc
+      let #(valid_acc, fixed_acc) = acc
       case original == fixed {
-        True -> #([original, ..valid], invalid)
-        False -> #(valid, [fixed, ..invalid])
+        True -> #([original, ..valid_acc], fixed_acc)
+        False -> #(valid_acc, [fixed, ..fixed_acc])
       }
     })
 
