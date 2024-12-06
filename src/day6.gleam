@@ -34,34 +34,86 @@ type Map {
   Map(dimensions: Dimensions, obstacles: set.Set(Position), guard: Guard)
 }
 
+type ContinueSimulation(a) {
+  ContinueSimulation
+  StopSimulation(reason: a)
+}
+
 fn run(input: String) -> Result(Nil, String) {
   use map <- result.try(parse_map(input))
   io.println("Part 1: " <> part1(map))
+  io.println("Part 2: " <> part2(map))
   Ok(Nil)
 }
 
 fn part1(map: Map) -> String {
-  map
-  |> run_simulation()
+  let #(visited, _stop_reason) =
+    run_simulation(map, fn(map, _guard_positions) {
+      case is_out_of_bounds(map, map.guard.position) {
+        True -> StopSimulation(Nil)
+        False -> ContinueSimulation
+      }
+    })
+
+  visited
+  |> set.map(fn(guard) { guard.position })
   |> set.size()
   |> int.to_string()
 }
 
-fn run_simulation(map: Map) -> set.Set(Position) {
-  do_run_simulation(map, set.new())
+fn part2(map: Map) -> String {
+  let #(original_guard_path, _stop_reason) =
+    run_simulation(map, fn(map, _position) {
+      case is_out_of_bounds(map, map.guard.position) {
+        True -> StopSimulation(Nil)
+        False -> ContinueSimulation
+      }
+    })
+
+  let guard_starting_position = map.guard.position
+  original_guard_path
+  |> set.map(fn(guard) { guard.position })
+  |> set.filter(fn(position) { position != guard_starting_position })
+  |> set.to_list()
+  |> list.filter(fn(position) {
+    let #(_visited, is_loop) =
+      run_simulation(
+        Map(..map, obstacles: set.insert(map.obstacles, position)),
+        fn(map, guard_states) {
+          let is_out_of_bounds = is_out_of_bounds(map, map.guard.position)
+          let is_loop = set.contains(guard_states, map.guard)
+
+          use <- bool.guard(when: is_loop, return: StopSimulation(True))
+          use <- bool.guard(
+            when: is_out_of_bounds,
+            return: StopSimulation(False),
+          )
+
+          ContinueSimulation
+        },
+      )
+
+    is_loop
+  })
+  |> list.length()
+  |> int.to_string()
+}
+
+fn run_simulation(
+  map: Map,
+  can_continue: fn(Map, set.Set(Guard)) -> ContinueSimulation(a),
+) -> #(set.Set(Guard), a) {
+  do_run_simulation(map, can_continue, set.new())
 }
 
 fn do_run_simulation(
   map: Map,
-  guard_positions: set.Set(Position),
-) -> set.Set(Position) {
-  use <- bool.guard(
-    when: is_out_of_bounds(map, map.guard.position)
-      && !set.is_empty(guard_positions),
-    return: guard_positions,
-  )
+  can_continue: fn(Map, set.Set(Guard)) -> ContinueSimulation(a),
+  guard_states: set.Set(Guard),
+) -> #(set.Set(Guard), a) {
+  use <- continue_simulation(can_continue(map, guard_states), guard_states)
 
-  let guard_positions = set.insert(guard_positions, map.guard.position)
+  let guard_positions = set.insert(guard_states, map.guard)
   let guard = map.guard
   let guard_position_candidate =
     move_in_direction(guard.position, guard.direction)
@@ -73,52 +125,28 @@ fn do_run_simulation(
           ..map,
           guard: Guard(..guard, direction: rotate_90deg(guard.direction)),
         )
-      do_run_simulation(next_map, guard_positions)
+
+      do_run_simulation(next_map, can_continue, guard_positions)
     }
 
     False -> {
       let next_map =
         Map(..map, guard: Guard(..guard, position: guard_position_candidate))
-      do_run_simulation(next_map, guard_positions)
+
+      do_run_simulation(next_map, can_continue, guard_positions)
     }
   }
 }
 
-fn debug_map(map: Map) {
-  list.range(from: 0, to: map.dimensions.width - 1)
-  |> list.each(fn(row) {
-    list.range(from: 0, to: map.dimensions.width - 1)
-    |> list.each(fn(col) {
-      let position = Position(row:, col:)
-      debug_guard(map, position)
-      debug_obstacle(map, position)
-      debug_empty_space(map, position)
-    })
-    io.print("\n")
-  })
-}
-
-fn debug_guard(map: Map, cursor: Position) {
-  use <- bool.guard(when: map.guard.position != cursor, return: Nil)
-
-  case map.guard.direction {
-    Up -> io.print("^")
-    Down -> io.print("v")
-    Left -> io.print("<")
-    Right -> io.print(">")
+fn continue_simulation(
+  continue: ContinueSimulation(a),
+  guard_states: set.Set(Guard),
+  simulation: fn() -> #(set.Set(Guard), a),
+) -> #(set.Set(Guard), a) {
+  case continue {
+    ContinueSimulation -> simulation()
+    StopSimulation(reason) -> #(guard_states, reason)
   }
-}
-
-fn debug_obstacle(map: Map, cursor: Position) {
-  use <- bool.guard(when: map.guard.position == cursor, return: Nil)
-  use <- bool.guard(when: !set.contains(map.obstacles, cursor), return: Nil)
-  io.print("#")
-}
-
-fn debug_empty_space(map: Map, cursor: Position) {
-  use <- bool.guard(when: set.contains(map.obstacles, cursor), return: Nil)
-  use <- bool.guard(when: map.guard.position == cursor, return: Nil)
-  io.print(".")
 }
 
 fn is_out_of_bounds(map: Map, guard_position: Position) -> Bool {
