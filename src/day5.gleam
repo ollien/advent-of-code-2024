@@ -5,6 +5,7 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option
+import gleam/order
 import gleam/result
 import gleam/set
 import gleam/string
@@ -40,11 +41,9 @@ fn run(input: String) -> Result(Nil, String) {
     })
 
   io.println("Part 1: " <> part1(valid_updates))
-  part2(adjacencies, invalid_updates)
-  |> result.then(fn(answer) {
-    io.println("Part 2: " <> answer)
-    Ok(Nil)
-  })
+  io.println("Part 2: " <> part2(adjacencies, invalid_updates))
+
+  Ok(Nil)
 }
 
 fn part1(valid_updates: List(Update)) -> String {
@@ -58,14 +57,10 @@ fn part1(valid_updates: List(Update)) -> String {
   |> int.to_string()
 }
 
-fn part2(
-  adjacencies: Adjacencies,
-  invalid_updates: List(Update),
-) -> Result(String, String) {
+fn part2(adjacencies: Adjacencies, invalid_updates: List(Update)) -> String {
   invalid_updates
-  |> list.try_map(fn(update) { make_valid_update(adjacencies, update) })
-  |> result.map(part1)
-  |> result.map_error(fn(_nil) { "No valid answers" })
+  |> list.map(fn(update) { make_valid_update(adjacencies, update) })
+  |> part1()
 }
 
 fn is_update_valid(adjacencies: Adjacencies, update: Update) -> Bool {
@@ -87,62 +82,37 @@ fn do_is_update_valid(adjacencies: Adjacencies, remaining: List(Page)) -> Bool {
   }
 }
 
-fn make_valid_update(
+fn make_valid_update(adjacencies: Adjacencies, update: Update) -> Update {
+  let sorted_pages =
+    list.sort(update.pages, fn(left, right) {
+      compare_pages(adjacencies, left, right)
+    })
+
+  Update(sorted_pages)
+}
+
+fn compare_pages(
   adjacencies: Adjacencies,
-  update: Update,
-) -> Result(Update, Nil) {
-  do_make_update_valid(adjacencies, set.from_list(update.pages), set.new())
-  |> result.map(fn(path) { Update(list.reverse(path)) })
-}
-
-fn do_make_update_valid(
-  adjacencies adjacencies: Adjacencies,
-  need needed_pages: set.Set(Page),
-  used used_pages: set.Set(Page),
-) -> Result(List(Page), Nil) {
-  case set.size(needed_pages) {
-    0 | 1 -> {
-      Ok(set.to_list(needed_pages))
-    }
-
-    _ -> {
-      needed_pages
-      |> set.to_list()
-      |> list.find_map(fn(page) {
-        try_page_to_make_valid(
-          adjacencies:,
-          page:,
-          need: needed_pages,
-          used: used_pages,
-        )
-      })
-    }
-  }
-}
-
-fn try_page_to_make_valid(
-  adjacencies adjacencies: Adjacencies,
-  page page: Page,
-  need needed_pages: set.Set(Page),
-  used used_pages: set.Set(Page),
-) -> Result(List(Page), Nil) {
-  dict.get(adjacencies, page)
-  |> result.map(fn(candidates) {
-    case
-      set.is_disjoint(candidates, needed_pages)
-      || !set.is_empty(set.intersection(used_pages, candidates))
-    {
-      True -> Error(Nil)
-      False ->
-        do_make_update_valid(
-          adjacencies:,
-          need: set.delete(needed_pages, page),
-          used: set.insert(used_pages, page),
-        )
-        |> result.map(fn(path) { [page, ..path] })
+  left: Page,
+  right: Page,
+) -> order.Order {
+  dict.get(adjacencies, left)
+  |> result.map(fn(left_adj) {
+    case set.contains(left_adj, right) {
+      True -> order.Lt
+      False -> order.Gt
     }
   })
-  |> result.flatten()
+  |> result.lazy_or(fn() {
+    dict.get(adjacencies, right)
+    |> result.map(fn(right_adj) {
+      case set.contains(right_adj, left) {
+        True -> order.Gt
+        False -> order.Lt
+      }
+    })
+  })
+  |> result.unwrap(or: order.Eq)
 }
 
 fn middle_element(items: List(a)) -> Result(a, Nil) {
