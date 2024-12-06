@@ -95,11 +95,8 @@ fn part2(map: Map) -> String {
       )
     })
 
-  list.fold(pids, from: [], with: fn(acc, _pid) {
-    [process.receive_forever(is_loop_subject), ..acc]
-  })
-  |> list.filter(fn(is_loop) { is_loop })
-  |> list.length()
+  pids
+  |> list.count(fn(_pid) { process.receive_forever(is_loop_subject) })
   |> int.to_string()
 }
 
