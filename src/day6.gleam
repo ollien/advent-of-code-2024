@@ -1,9 +1,9 @@
 import advent_of_code_2024
 import gleam/bool
-import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/otp/task
 import gleam/result
 import gleam/set
 import gleam/string
@@ -78,25 +78,18 @@ fn part2(map: Map) -> String {
     |> set.filter(fn(position) { position != guard_starting_position })
     |> set.to_list()
 
-  let is_loop_subject = process.new_subject()
-
-  let pids =
+  let tasks =
     list.map(possible_positions, fn(position) {
-      process.start(
-        fn() {
-          let map_with_obstacle =
-            Map(..map, obstacles: set.insert(map.obstacles, position))
+      task.async(fn() {
+        let map_with_obstacle =
+          Map(..map, obstacles: set.insert(map.obstacles, position))
 
-          let loops = simulation_produces_loop(map_with_obstacle)
-
-          process.send(is_loop_subject, loops)
-        },
-        linked: True,
-      )
+        simulation_produces_loop(map_with_obstacle)
+      })
     })
 
-  pids
-  |> list.count(fn(_pid) { process.receive_forever(is_loop_subject) })
+  tasks
+  |> list.count(task.await_forever)
   |> int.to_string()
 }
 
