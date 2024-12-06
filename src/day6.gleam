@@ -1,5 +1,6 @@
 import advent_of_code_2024
 import gleam/bool
+import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/list
@@ -71,30 +72,33 @@ fn part2(map: Map) -> String {
     })
 
   let guard_starting_position = map.guard.position
-  original_guard_path
-  |> set.map(fn(guard) { guard.position })
-  |> set.filter(fn(position) { position != guard_starting_position })
-  |> set.to_list()
-  |> list.filter(fn(position) {
-    let #(_visited, is_loop) =
-      run_simulation(
-        Map(..map, obstacles: set.insert(map.obstacles, position)),
-        fn(map, guard_states) {
-          let is_out_of_bounds = is_out_of_bounds(map, map.guard.position)
-          let is_loop = set.contains(guard_states, map.guard)
+  let possible_positions =
+    original_guard_path
+    |> set.map(fn(guard) { guard.position })
+    |> set.filter(fn(position) { position != guard_starting_position })
+    |> set.to_list()
 
-          use <- bool.guard(when: is_loop, return: StopSimulation(True))
-          use <- bool.guard(
-            when: is_out_of_bounds,
-            return: StopSimulation(False),
-          )
+  let is_loop_subject = process.new_subject()
 
-          ContinueSimulation
+  let pids =
+    list.map(possible_positions, fn(position) {
+      process.start(
+        fn() {
+          let map_with_obstacle =
+            Map(..map, obstacles: set.insert(map.obstacles, position))
+
+          let loops = simulation_produces_loop(map_with_obstacle)
+
+          process.send(is_loop_subject, loops)
         },
+        linked: True,
       )
+    })
 
-    is_loop
+  list.fold(pids, from: [], with: fn(acc, _pid) {
+    [process.receive_forever(is_loop_subject), ..acc]
   })
+  |> list.filter(fn(is_loop) { is_loop })
   |> list.length()
   |> int.to_string()
 }
@@ -147,6 +151,20 @@ fn continue_simulation(
     ContinueSimulation -> simulation()
     StopSimulation(reason) -> #(guard_states, reason)
   }
+}
+
+fn simulation_produces_loop(map: Map) {
+  let #(_visited, is_loop) =
+    run_simulation(map, fn(map, guard_states) {
+      let is_out_of_bounds = is_out_of_bounds(map, map.guard.position)
+      let is_loop = set.contains(guard_states, map.guard)
+
+      use <- bool.guard(when: is_loop, return: StopSimulation(True))
+      use <- bool.guard(when: is_out_of_bounds, return: StopSimulation(False))
+
+      ContinueSimulation
+    })
+  is_loop
 }
 
 fn is_out_of_bounds(map: Map, guard_position: Position) -> Bool {
