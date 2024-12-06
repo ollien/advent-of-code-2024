@@ -80,7 +80,7 @@ fn compare_pages(
   right: Page,
 ) -> order.Order {
   // Must check both directions; what you don't want is an item that has no element that must come after it
-  // but does have one that must come before it
+  // but does have one that must come before it (29 and 23 in the example meet this criteria)
   let left_order =
     adjacencies
     |> dict.get(left)
