@@ -10,6 +10,7 @@ import gleam/string
 type Operator {
   Add
   Multiply
+  Concat
 }
 
 type Calibration {
@@ -31,22 +32,23 @@ pub fn main() {
 
 fn run(input: String) -> Result(Nil, String) {
   use calibrations <- result.try(parse_input(input))
-  io.println("Part 1: " <> part1(calibrations))
+  io.println("Part 1: " <> solve(calibrations, using: [Add, Multiply]))
+  io.println("Part 2: " <> solve(calibrations, using: [Add, Multiply, Concat]))
 
   Ok(Nil)
 }
 
-fn part1(calibrations: List(Calibration)) -> String {
+fn solve(
+  calibrations: List(Calibration),
+  using operators: List(Operator),
+) -> String {
   calibrations
-  |> list.map(possible_equations)
+  |> list.map(fn(calibration) {
+    possible_equations(calibration, using: operators)
+  })
   |> list.filter_map(fn(equations) {
     equations
     |> list.find(fn(equation) {
-      // io.debug(#(
-      //   equation.result,
-      //   evaluate_expression(equation.expression),
-      //   equation.expression,
-      // ))
       equation.result == evaluate_expression(equation.expression)
     })
     |> result.map(fn(equation) { equation.result })
@@ -89,27 +91,57 @@ fn apply_operation(operand1: Int, operand2: Int, operator: Operator) -> Int {
   case operator {
     Add -> operand1 + operand2
     Multiply -> operand1 * operand2
+    Concat -> concat(operand1, operand2)
   }
 }
 
-fn possible_equations(calibration: Calibration) -> List(Equation) {
+fn concat(operand1: Int, operand2: Int) {
+  zero_pad(operand1, count_digits(operand2)) + operand2
+}
+
+fn zero_pad(n: Int, times times: Int) -> Int {
+  case times {
+    0 -> n
+    times -> zero_pad(n * 10, times - 1)
+  }
+}
+
+fn count_digits(n: Int) -> Int {
+  do_count_digits(n, 1)
+}
+
+fn do_count_digits(n: Int, num_digits: Int) -> Int {
+  case int.absolute_value(n) < 10 {
+    True -> num_digits
+    False -> do_count_digits(n / 10, num_digits + 1)
+  }
+}
+
+fn possible_equations(
+  calibration: Calibration,
+  using operators: List(Operator),
+) -> List(Equation) {
   calibration.operands
-  |> possible_expressions()
+  |> possible_expressions(using: operators)
   |> list.map(fn(expression) {
     Equation(result: calibration.test_value, expression:)
   })
 }
 
-fn possible_expressions(operands: List(Int)) -> List(Expression) {
+fn possible_expressions(
+  operands: List(Int),
+  using operators: List(Operator),
+) -> List(Expression) {
   case operands {
     [] -> []
     [operand] -> {
       [ExpressionEnd(operand:)]
     }
     [operand, ..rest_operands] -> {
-      let rest_expressions = possible_expressions(rest_operands)
+      let rest_expressions =
+        possible_expressions(rest_operands, using: operators)
       list.flat_map(rest_expressions, fn(expr_rest) {
-        list.map([Add, Multiply], fn(operator) {
+        list.map(operators, fn(operator) {
           ExpressionContinue(operand:, operator:, rest: expr_rest)
         })
       })
