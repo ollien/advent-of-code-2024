@@ -143,7 +143,8 @@ fn possible_expressions(
       yielder.once(fn() { ExpressionEnd(operand:) })
     }
     [operand, ..rest_operands] -> {
-      possible_expressions(rest_operands, using: operators)
+      rest_operands
+      |> possible_expressions(using: operators)
       |> yielder.flat_map(fn(expr_rest) {
         operators
         |> yielder.from_list()
