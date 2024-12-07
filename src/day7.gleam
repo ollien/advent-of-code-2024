@@ -6,6 +6,7 @@ import gleam/option
 import gleam/regexp
 import gleam/result
 import gleam/string
+import gleam/yielder
 
 type Operator {
   Add
@@ -48,7 +49,7 @@ fn solve(
   })
   |> list.filter_map(fn(equations) {
     equations
-    |> list.find(fn(equation) {
+    |> yielder.find(fn(equation) {
       equation.result == evaluate_expression(equation.expression)
     })
     |> result.map(fn(equation) { equation.result })
@@ -120,10 +121,10 @@ fn do_count_digits(n: Int, num_digits: Int) -> Int {
 fn possible_equations(
   calibration: Calibration,
   using operators: List(Operator),
-) -> List(Equation) {
+) -> yielder.Yielder(Equation) {
   calibration.operands
   |> possible_expressions(using: operators)
-  |> list.map(fn(expression) {
+  |> yielder.map(fn(expression) {
     Equation(result: calibration.test_value, expression:)
   })
 }
@@ -131,17 +132,18 @@ fn possible_equations(
 fn possible_expressions(
   operands: List(Int),
   using operators: List(Operator),
-) -> List(Expression) {
+) -> yielder.Yielder(Expression) {
   case operands {
-    [] -> []
+    [] -> yielder.empty()
     [operand] -> {
-      [ExpressionEnd(operand:)]
+      yielder.once(fn() { ExpressionEnd(operand:) })
     }
     [operand, ..rest_operands] -> {
-      let rest_expressions =
-        possible_expressions(rest_operands, using: operators)
-      list.flat_map(rest_expressions, fn(expr_rest) {
-        list.map(operators, fn(operator) {
+      possible_expressions(rest_operands, using: operators)
+      |> yielder.flat_map(fn(expr_rest) {
+        operators
+        |> yielder.from_list()
+        |> yielder.map(fn(operator) {
           ExpressionContinue(operand:, operator:, rest: expr_rest)
         })
       })
