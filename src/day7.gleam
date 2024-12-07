@@ -3,6 +3,7 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option
+import gleam/otp/task
 import gleam/regexp
 import gleam/result
 import gleam/string
@@ -47,13 +48,16 @@ fn solve(
   |> list.map(fn(calibration) {
     possible_equations(calibration, using: operators)
   })
-  |> list.filter_map(fn(equations) {
-    equations
-    |> yielder.find(fn(equation) {
-      equation.result == evaluate_expression(equation.expression)
+  |> list.map(fn(equations) {
+    task.async(fn() {
+      equations
+      |> yielder.find(fn(equation) {
+        equation.result == evaluate_expression(equation.expression)
+      })
+      |> result.map(fn(equation) { equation.result })
     })
-    |> result.map(fn(equation) { equation.result })
   })
+  |> list.filter_map(task.await_forever)
   |> int.sum()
   |> int.to_string()
 }
