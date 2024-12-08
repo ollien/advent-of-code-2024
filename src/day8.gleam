@@ -1,4 +1,5 @@
 import advent_of_code_2024
+import gleam/bool
 import gleam/dict
 import gleam/int
 import gleam/io
@@ -28,22 +29,13 @@ fn run(input: String) -> Result(Nil, String) {
   use map <- result.try(parse_input(input))
 
   io.println("Part 1: " <> part1(map))
+  io.println("Part 1: " <> part2(map))
   Ok(Nil)
 }
 
 fn part1(map: Map) -> String {
   map
-  |> locate_antinodes()
-  |> set.size()
-  |> int.to_string
-}
-
-fn locate_antinodes(map: Map) -> set.Set(Position) {
-  map.antennas
-  |> dict.values()
-  |> list.flat_map(list.combination_pairs)
-  |> list.flat_map(fn(antenna_pair) {
-    let #(antenna1, antenna2) = antenna_pair
+  |> locate_antinodes(fn(antenna1, antenna2) {
     let row_distance = antenna1.row - antenna2.row
     let column_distance = antenna1.column - antenna2.column
 
@@ -58,13 +50,59 @@ fn locate_antinodes(map: Map) -> set.Set(Position) {
       ),
     ]
   })
-  |> list.filter(fn(position) {
-    position.column < map.dimensions.width
-    && position.row < map.dimensions.height
-    && position.column >= 0
-    && position.row >= 0
+  |> set.size()
+  |> int.to_string
+}
+
+fn part2(map: Map) -> String {
+  map
+  |> locate_antinodes(fn(antenna1, antenna2) {
+    let row_distance = antenna1.row - antenna2.row
+    let column_distance = antenna1.column - antenna2.column
+
+    list.flatten([
+      points_in_slope(map, antenna1, row_distance, column_distance),
+      points_in_slope(map, antenna2, -row_distance, -column_distance),
+    ])
   })
+  |> set.size()
+  |> int.to_string
+}
+
+fn locate_antinodes(
+  map: Map,
+  locate: fn(Position, Position) -> List(Position),
+) -> set.Set(Position) {
+  map.antennas
+  |> dict.values()
+  |> list.flat_map(list.combination_pairs)
+  |> list.flat_map(fn(antenna_pair) {
+    let #(antenna1, antenna2) = antenna_pair
+    locate(antenna1, antenna2)
+  })
+  |> list.filter(fn(position) { in_bounds(map, position) })
   |> set.from_list()
+}
+
+fn points_in_slope(
+  map: Map,
+  position: Position,
+  d_row: Int,
+  d_col: Int,
+) -> List(Position) {
+  let stepped_position =
+    Position(row: position.row + d_row, column: position.column + d_col)
+  case in_bounds(map, position) {
+    True -> [position, ..points_in_slope(map, stepped_position, d_row, d_col)]
+    False -> []
+  }
+}
+
+fn in_bounds(map: Map, position: Position) {
+  position.column < map.dimensions.width
+  && position.row < map.dimensions.height
+  && position.column >= 0
+  && position.row >= 0
 }
 
 fn parse_input(input: String) -> Result(Map, String) {
