@@ -140,6 +140,7 @@ fn do_defrag(
 fn delete_file(disk: Disk, address: Address) -> Disk {
   case dict.get(disk.used_spans, address) {
     Error(Nil) -> disk
+
     Ok(file) -> {
       Disk(
         free_spans: dict.insert(
@@ -263,6 +264,7 @@ fn do_parse_input_sequence(
         ),
       )
     }
+
     [file_width, free_width, ..rest_sequence] if free_width == 0 -> {
       let acc =
         Disk(
@@ -281,6 +283,7 @@ fn do_parse_input_sequence(
         acc:,
       )
     }
+
     [file_width, free_width, ..rest_sequence] -> {
       let acc =
         Disk(
