@@ -12,12 +12,13 @@ type Position {
   Position(row: Int, col: Int)
 }
 
-type Dimensions {
-  Dimensions(height: Int, width: Int)
+type Map {
+  Map(locations: dict.Dict(Position, Int))
 }
 
-type Map {
-  Map(locations: dict.Dict(Position, Int), dimensions: Dimensions)
+type SolveMode {
+  CountPaths
+  CountDestinations
 }
 
 pub fn main() {
@@ -29,19 +30,40 @@ fn run(input: String) -> Result(Nil, String) {
   use part1_result <- result.try(part1(map, trailheads))
 
   io.println("Part 1: " <> part1_result)
+
+  use part2_result <- result.try(part2(map, trailheads))
+  io.println("Part 2: " <> part2_result)
+
   Ok(Nil)
 }
 
 fn part1(map: Map, trailheads: List(Position)) -> Result(String, String) {
   use scores <- result.map(
-    list.try_map(trailheads, fn(trailhead) { trail_score(map, trailhead) }),
+    list.try_map(trailheads, fn(trailhead) {
+      trail_score(map, CountDestinations, trailhead)
+    }),
   )
   scores
   |> int.sum()
   |> int.to_string()
 }
 
-fn trail_score(map: Map, trailhead: Position) -> Result(Int, String) {
+fn part2(map: Map, trailheads: List(Position)) -> Result(String, String) {
+  use scores <- result.map(
+    list.try_map(trailheads, fn(trailhead) {
+      trail_score(map, CountPaths, trailhead)
+    }),
+  )
+  scores
+  |> int.sum()
+  |> int.to_string()
+}
+
+fn trail_score(
+  map: Map,
+  mode: SolveMode,
+  trailhead: Position,
+) -> Result(Int, String) {
   let trailhead_result =
     map.locations
     |> dict.get(trailhead)
@@ -54,25 +76,29 @@ fn trail_score(map: Map, trailhead: Position) -> Result(Int, String) {
     })
 
   use _ <- result.map(trailhead_result)
-  do_trail_score(map, [trailhead], set.new(), 0)
+  do_trail_score(map, mode, [trailhead], set.new(), 0)
 }
 
 fn do_trail_score(
   map: Map,
+  mode: SolveMode,
   to_visit: List(Position),
   visited: set.Set(Position),
   acc: Int,
 ) -> Int {
   use visiting, to_visit <- try_pop(to_visit, or: acc)
   use <- bool.lazy_guard(when: set.contains(visited, visiting), return: fn() {
-    do_trail_score(map, to_visit, visited, acc)
+    do_trail_score(map, mode, to_visit, visited, acc)
   })
 
   // We should not be passing invalid positions in to_visit
   let assert Ok(visiting_height) = dict.get(map.locations, visiting)
-  let visited = set.insert(visited, visiting)
+  let visited = case mode {
+    CountDestinations -> set.insert(visited, visiting)
+    CountPaths -> set.new()
+  }
   case visiting_height {
-    9 -> do_trail_score(map, to_visit, visited, acc + 1)
+    9 -> do_trail_score(map, mode, to_visit, visited, acc + 1)
     _ -> {
       let neighbors_to_visit =
         visiting
@@ -89,6 +115,7 @@ fn do_trail_score(
 
       do_trail_score(
         map,
+        mode,
         list.flatten([neighbors_to_visit, to_visit]),
         visited,
         acc,
@@ -112,7 +139,6 @@ fn parse_input(input: String) -> Result(#(Map, List(Position)), String) {
     |> string.trim_end()
     |> string.split("\n")
 
-  use dimensions <- result.try(measure_input(input_lines))
   use locations <- result.try(parse_grid(input_lines))
   let trailheads =
     locations
@@ -125,7 +151,7 @@ fn parse_input(input: String) -> Result(#(Map, List(Position)), String) {
       }
     })
 
-  Ok(#(Map(dimensions:, locations:), trailheads))
+  Ok(#(Map(locations:), trailheads))
 }
 
 fn parse_grid(
@@ -159,20 +185,6 @@ fn parse_grid_line(
     Ok(#(position, parsed_value))
   })
   |> result.map(dict.from_list)
-}
-
-fn measure_input(input_lines: List(String)) -> Result(Dimensions, String) {
-  let height = list.length(input_lines)
-  use head_row, rest_rows <- try_pop(
-    input_lines,
-    or: Ok(Dimensions(height: 0, width: 0)),
-  )
-
-  let width = string.length(head_row)
-  case list.all(rest_rows, fn(row) { string.length(row) == width }) {
-    True -> Ok(Dimensions(height:, width:))
-    False -> Error("Input must be rectangular")
-  }
 }
 
 fn parse_int(s: String) -> Result(Int, String) {
