@@ -29,6 +29,11 @@ type Disk {
   )
 }
 
+type DefragMode {
+  SpreadFileDefragMode
+  ColocateFileDefragMode
+}
+
 pub fn main() {
   advent_of_code_2024.run_with_input_file(run)
 }
@@ -39,12 +44,22 @@ fn run(input: String) -> Result(Nil, String) {
   io.print_error("")
 
   io.println("Part 1: " <> part1(input))
+  io.println("Part 2: " <> part2(input))
 
   Ok(Nil)
 }
 
 fn part1(disk: Disk) -> String {
-  let disk = defrag(disk)
+  let disk = defrag(disk, SpreadFileDefragMode)
+
+  disk.used_blocks
+  |> checksum()
+  |> int.to_string()
+}
+
+fn part2(disk: Disk) -> String {
+  let disk = defrag(disk, ColocateFileDefragMode)
+
   disk.used_blocks
   |> checksum()
   |> int.to_string()
@@ -92,7 +107,7 @@ fn do_debug_disk(disk: Disk, current_addr: Address) -> Nil {
   }
 }
 
-fn defrag(disk: Disk) -> Disk {
+fn defrag(disk: Disk, mode: DefragMode) -> Disk {
   let file_addresses =
     disk.used_blocks
     |> dict.keys()
@@ -103,13 +118,14 @@ fn defrag(disk: Disk) -> Disk {
     |> dict.keys()
     |> list.sort(int.compare)
 
-  do_defrag(disk, file_addresses, free_addresses)
+  do_defrag(disk, file_addresses, free_addresses, mode)
 }
 
 fn do_defrag(
   disk: Disk,
   files_to_defrag: List(Address),
   free_addresses: List(Address),
+  mode: DefragMode,
 ) -> Disk {
   use file_addr, files_to_defrag <- try_pop(files_to_defrag, or: disk)
   // This is guaranteed by construction of files_to_defrag
@@ -123,6 +139,7 @@ fn do_defrag(
       file_addr,
       file.size,
       sorted_insert(file_addr, free_addresses),
+      mode,
     )
   {
     // Can't defrag anymore
@@ -144,7 +161,7 @@ fn do_defrag(
           #(disk, space_left - space_to_put_in_span)
         })
 
-      do_defrag(disk, files_to_defrag, free_addresses)
+      do_defrag(disk, files_to_defrag, free_addresses, mode)
     }
   }
 }
@@ -175,19 +192,20 @@ fn collect_space_for_file(
   file_addr: Address,
   space_needed: Int,
   free_addresses: List(Address),
+  mode: DefragMode,
 ) -> Result(#(Disk, List(#(Address, BlankSpace)), List(Address)), Nil) {
   use space_addr, free_addresses <- try_pop(free_addresses, or: Error(Nil))
 
   // This is guaranteed by construction of free_addresses
   let assert Ok(span) = dict.get(disk.free_blocks, space_addr)
-  case int.compare(span.size, space_needed) {
-    order.Eq -> {
+  case int.compare(span.size, space_needed), mode {
+    order.Eq, _any_mode -> {
       let disk =
         Disk(..disk, free_blocks: dict.delete(disk.free_blocks, space_addr))
       Ok(#(disk, [#(space_addr, span)], free_addresses))
     }
 
-    order.Gt -> {
+    order.Gt, _any_mode -> {
       let free_blocks =
         disk.free_blocks
         |> dict.delete(space_addr)
@@ -205,7 +223,7 @@ fn collect_space_for_file(
       )
     }
 
-    order.Lt -> {
+    order.Lt, SpreadFileDefragMode -> {
       let disk =
         Disk(..disk, free_blocks: dict.delete(disk.free_blocks, space_addr))
 
@@ -216,10 +234,26 @@ fn collect_space_for_file(
           file_addr,
           space_needed - span.size,
           free_addresses,
+          mode,
         ),
       )
 
       Ok(#(disk, [#(space_addr, span), ..space_to_use], free_addresses))
+    }
+
+    order.Lt, ColocateFileDefragMode -> {
+      use #(disk, space_to_use, free_addresses) <- result.try(
+        collect_space_for_file(
+          disk,
+          file,
+          file_addr,
+          space_needed,
+          free_addresses,
+          mode,
+        ),
+      )
+
+      Ok(#(disk, space_to_use, [space_addr, ..free_addresses]))
     }
   }
 }
