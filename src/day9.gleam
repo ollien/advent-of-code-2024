@@ -1,5 +1,4 @@
 import advent_of_code_2024
-import gleam/bool
 import gleam/dict
 import gleam/int
 import gleam/io
@@ -24,8 +23,8 @@ type BlankSpace {
 
 type Disk {
   Disk(
-    used_blocks: dict.Dict(Address, File),
-    free_blocks: dict.Dict(Address, BlankSpace),
+    used_spans: dict.Dict(Address, File),
+    free_spans: dict.Dict(Address, BlankSpace),
   )
 }
 
@@ -52,7 +51,7 @@ fn run(input: String) -> Result(Nil, String) {
 fn part1(disk: Disk) -> String {
   let disk = defrag(disk, SpreadFileDefragMode)
 
-  disk.used_blocks
+  disk.used_spans
   |> checksum()
   |> int.to_string()
 }
@@ -60,7 +59,7 @@ fn part1(disk: Disk) -> String {
 fn part2(disk: Disk) -> String {
   let disk = defrag(disk, ColocateFileDefragMode)
 
-  disk.used_blocks
+  disk.used_spans
   |> checksum()
   |> int.to_string()
 }
@@ -79,42 +78,14 @@ fn checksum(files: dict.Dict(Address, File)) -> Int {
   })
 }
 
-fn debug_disk(disk: Disk) -> Nil {
-  do_debug_disk(disk, 0)
-  io.print_error("\n")
-}
-
-fn do_debug_disk(disk: Disk, current_addr: Address) -> Nil {
-  case
-    dict.get(disk.used_blocks, current_addr),
-    dict.get(disk.free_blocks, current_addr)
-  {
-    Error(Nil), Error(Nil) -> Nil
-
-    Ok(_), Ok(_) ->
-      panic as {
-        "conflicting space at address " <> int.to_string(current_addr)
-      }
-
-    Ok(file), Error(Nil) -> {
-      io.print_error(string.repeat(int.to_string(file.id), file.size))
-      do_debug_disk(disk, current_addr + file.size)
-    }
-    Error(Nil), Ok(free) -> {
-      io.print_error(string.repeat(".", free.size))
-      do_debug_disk(disk, current_addr + free.size)
-    }
-  }
-}
-
 fn defrag(disk: Disk, mode: DefragMode) -> Disk {
   let file_addresses =
-    disk.used_blocks
+    disk.used_spans
     |> dict.keys()
     |> list.sort(order.reverse(int.compare))
 
   let free_addresses =
-    disk.free_blocks
+    disk.free_spans
     |> dict.keys()
     |> list.sort(int.compare)
 
@@ -129,7 +100,7 @@ fn do_defrag(
 ) -> Disk {
   use file_addr, files_to_defrag <- try_pop(files_to_defrag, or: disk)
   // This is guaranteed by construction of files_to_defrag
-  let assert Ok(file) = dict.get(disk.used_blocks, file_addr)
+  let assert Ok(file) = dict.get(disk.used_spans, file_addr)
   let disk = delete_file(disk, file_addr)
 
   case
@@ -167,23 +138,23 @@ fn do_defrag(
 }
 
 fn delete_file(disk: Disk, address: Address) -> Disk {
-  case dict.get(disk.used_blocks, address) {
+  case dict.get(disk.used_spans, address) {
     Error(Nil) -> disk
     Ok(file) -> {
       Disk(
-        free_blocks: dict.insert(
-          disk.free_blocks,
+        free_spans: dict.insert(
+          disk.free_spans,
           address,
           BlankSpace(size: file.size),
         ),
-        used_blocks: dict.delete(disk.used_blocks, address),
+        used_spans: dict.delete(disk.used_spans, address),
       )
     }
   }
 }
 
 fn store_file(disk: Disk, address: Address, file: File) -> Disk {
-  Disk(..disk, used_blocks: dict.insert(disk.used_blocks, address, file))
+  Disk(..disk, used_spans: dict.insert(disk.used_spans, address, file))
 }
 
 fn collect_space_for_file(
@@ -197,24 +168,24 @@ fn collect_space_for_file(
   use space_addr, free_addresses <- try_pop(free_addresses, or: Error(Nil))
 
   // This is guaranteed by construction of free_addresses
-  let assert Ok(span) = dict.get(disk.free_blocks, space_addr)
+  let assert Ok(span) = dict.get(disk.free_spans, space_addr)
   case int.compare(span.size, space_needed), mode {
     order.Eq, _any_mode -> {
       let disk =
-        Disk(..disk, free_blocks: dict.delete(disk.free_blocks, space_addr))
+        Disk(..disk, free_spans: dict.delete(disk.free_spans, space_addr))
       Ok(#(disk, [#(space_addr, span)], free_addresses))
     }
 
     order.Gt, _any_mode -> {
-      let free_blocks =
-        disk.free_blocks
+      let free_spans =
+        disk.free_spans
         |> dict.delete(space_addr)
         |> dict.insert(
           space_addr + space_needed,
           BlankSpace(span.size - space_needed),
         )
 
-      let disk = Disk(..disk, free_blocks:)
+      let disk = Disk(..disk, free_spans:)
       Ok(
         #(disk, [#(space_addr, span)], [
           space_addr + space_needed,
@@ -225,7 +196,7 @@ fn collect_space_for_file(
 
     order.Lt, SpreadFileDefragMode -> {
       let disk =
-        Disk(..disk, free_blocks: dict.delete(disk.free_blocks, space_addr))
+        Disk(..disk, free_spans: dict.delete(disk.free_spans, space_addr))
 
       use #(disk, space_to_use, free_addresses) <- result.try(
         collect_space_for_file(
@@ -270,7 +241,7 @@ fn parse_input_sequence(sequence: List(Int)) -> Disk {
     sequence,
     0,
     0,
-    Disk(used_blocks: dict.new(), free_blocks: dict.new()),
+    Disk(used_spans: dict.new(), free_spans: dict.new()),
   )
 }
 
@@ -285,8 +256,8 @@ fn do_parse_input_sequence(
     [file_width] -> {
       Disk(
         ..acc,
-        used_blocks: dict.insert(
-          acc.used_blocks,
+        used_spans: dict.insert(
+          acc.used_spans,
           next_address,
           File(id: next_id, size: file_width),
         ),
@@ -296,8 +267,8 @@ fn do_parse_input_sequence(
       let acc =
         Disk(
           ..acc,
-          used_blocks: dict.insert(
-            acc.used_blocks,
+          used_spans: dict.insert(
+            acc.used_spans,
             next_address,
             File(id: next_id, size: file_width),
           ),
@@ -313,13 +284,13 @@ fn do_parse_input_sequence(
     [file_width, free_width, ..rest_sequence] -> {
       let acc =
         Disk(
-          used_blocks: dict.insert(
-            acc.used_blocks,
+          used_spans: dict.insert(
+            acc.used_spans,
             next_address,
             File(id: next_id, size: file_width),
           ),
-          free_blocks: dict.insert(
-            acc.free_blocks,
+          free_spans: dict.insert(
+            acc.free_spans,
             next_address + file_width,
             BlankSpace(size: free_width),
           ),
