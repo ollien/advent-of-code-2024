@@ -1,5 +1,4 @@
 import advent_of_code_2024
-import gleam/bool
 import gleam/dict
 import gleam/int
 import gleam/io
