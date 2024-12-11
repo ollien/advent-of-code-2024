@@ -1,9 +1,11 @@
 import advent_of_code_2024
 import gleam/bool
+import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/option
 import gleam/result
 import gleam/string
 
@@ -14,31 +16,63 @@ pub fn main() {
 fn run(input: String) -> Result(Nil, String) {
   use input <- result.try(parse_input(input))
   io.println("Part 1: " <> part1(input))
+  io.println("Part 2: " <> part2(input))
 
   Ok(Nil)
 }
 
-fn part1(input: List(Int)) -> String {
-  list.range(from: 1, to: 25)
-  |> list.fold(from: input, with: fn(stones, _n) { simulate(stones) })
-  |> list.length()
+fn part1(input: dict.Dict(Int, Int)) -> String {
+  input
+  |> run_simulation(25)
   |> int.to_string()
 }
 
-fn simulate(stones: List(Int)) {
-  do_simulate(stones, [])
+fn part2(input: dict.Dict(Int, Int)) -> String {
+  input
+  |> run_simulation(75)
+  |> int.to_string()
 }
 
-fn do_simulate(in_stones: List(Int), out_stones: List(Int)) {
-  case in_stones {
-    [] -> list.reverse(out_stones)
-    [stone, ..rest_stones] -> {
-      let out_stones =
-        stone
-        |> transform_stone()
-        |> list.fold(from: out_stones, with: list.prepend)
+fn run_simulation(input: dict.Dict(Int, Int), num_steps: Int) -> Int {
+  list.range(from: 1, to: num_steps)
+  |> list.fold(from: input, with: fn(stones, _n) { simulate_step(stones) })
+  |> dict.values()
+  |> int.sum()
+}
 
-      do_simulate(rest_stones, out_stones)
+fn simulate_step(stones: dict.Dict(Int, Int)) -> dict.Dict(Int, Int) {
+  do_simulate_step(dict.to_list(stones), [])
+}
+
+fn do_simulate_step(
+  in_stones: List(#(Int, Int)),
+  out_stones: List(#(Int, Int)),
+) -> dict.Dict(Int, Int) {
+  case in_stones {
+    [] ->
+      list.fold(out_stones, from: dict.new(), with: fn(acc, entry) {
+        let #(key, count) = entry
+        dict.upsert(acc, key, fn(current) {
+          case current {
+            option.None -> count
+            option.Some(n) -> n + count
+          }
+        })
+      })
+
+    [#(stone, count), ..rest_stones] -> {
+      let out_stones = case transform_stone(stone) {
+        [new_stone] -> [#(new_stone, count), ..out_stones]
+        [new_stone1, new_stone2] -> [
+          #(new_stone1, count),
+          #(new_stone2, count),
+          ..out_stones
+        ]
+        _ ->
+          panic as "it is not possible to have more than two stones produced by a single one in this simulation"
+      }
+
+      do_simulate_step(rest_stones, out_stones)
     }
   }
 }
@@ -54,11 +88,21 @@ fn transform_stone(stone: Int) -> List(Int) {
   [upper_digits, lower_digits]
 }
 
-fn parse_input(input: String) -> Result(List(Int), String) {
+fn parse_input(input: String) -> Result(dict.Dict(Int, Int), String) {
   input
   |> string.trim_end()
   |> string.split(" ")
   |> list.try_map(parse_int)
+  |> result.map(fn(stones) {
+    list.fold(stones, from: dict.new(), with: fn(acc, stone) {
+      dict.upsert(acc, stone, fn(count) {
+        case count {
+          option.Some(n) -> n + 1
+          option.None -> 1
+        }
+      })
+    })
+  })
 }
 
 fn parse_int(s: String) -> Result(Int, String) {
