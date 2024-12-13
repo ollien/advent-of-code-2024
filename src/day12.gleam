@@ -32,6 +32,7 @@ fn run(input: String) -> Result(Nil, String) {
   let regions = build_regions(raw_map)
 
   io.println("Part 1: " <> part1(raw_map, regions))
+  io.println("Part 2: " <> part2(regions))
 
   Ok(Nil)
 }
@@ -41,6 +42,13 @@ fn part1(raw_map: RawMap, regions: List(Region)) -> String {
   |> list.map(fn(region) {
     list.length(region.tiles) * region_perimeter(raw_map, region)
   })
+  |> int.sum()
+  |> int.to_string()
+}
+
+fn part2(regions: List(Region)) -> String {
+  regions
+  |> list.map(fn(region) { list.length(region.tiles) * region_edges(region) })
   |> int.sum()
   |> int.to_string()
 }
@@ -58,13 +66,77 @@ fn do_region_perimeter(
   use tile, to_check <- try_pop(to_check, or: 0)
 
   let subtract =
-    neighbors(tile)
+    cardinal_neighbors(tile)
     |> list.filter(fn(position) { dict.has_key(raw_map.tiles, position) })
     |> set.from_list()
     |> set.intersection(known_positions)
     |> set.size()
 
   { 4 - subtract } + do_region_perimeter(raw_map, to_check, known_positions)
+}
+
+fn region_edges(region: Region) -> Int {
+  do_region_edges(set.from_list(region.tiles), region.tiles, set.new(), 0)
+}
+
+fn do_region_edges(
+  region_tiles: set.Set(Position),
+  to_visit: List(Position),
+  visited: set.Set(Position),
+  corners: Int,
+) -> Int {
+  use visiting, to_visit <- try_pop(to_visit, or: corners)
+  use <- bool.lazy_guard(set.contains(visited, visiting), fn() {
+    do_region_edges(region_tiles, to_visit, visited, corners)
+  })
+
+  let visited = set.insert(visited, visiting)
+
+  let convex_check = [
+    #(up_neighbor(visiting), left_neighbor(visiting)),
+    #(up_neighbor(visiting), right_neighbor(visiting)),
+    #(down_neighbor(visiting), left_neighbor(visiting)),
+    #(down_neighbor(visiting), right_neighbor(visiting)),
+  ]
+
+  let convex =
+    list.count(convex_check, fn(to_check) {
+      let #(a, b) = to_check
+      !set.contains(region_tiles, a) && !set.contains(region_tiles, b)
+    })
+
+  let concave_check = [
+    #(
+      up_neighbor(visiting),
+      left_neighbor(visiting),
+      up_left_neighbor(visiting),
+    ),
+    #(
+      up_neighbor(visiting),
+      right_neighbor(visiting),
+      up_right_neighbor(visiting),
+    ),
+    #(
+      down_neighbor(visiting),
+      left_neighbor(visiting),
+      down_left_neighbor(visiting),
+    ),
+    #(
+      down_neighbor(visiting),
+      right_neighbor(visiting),
+      down_right_neighbor(visiting),
+    ),
+  ]
+
+  let concave =
+    list.count(concave_check, fn(to_check) {
+      let #(a, b, c) = to_check
+      set.contains(region_tiles, a)
+      && set.contains(region_tiles, b)
+      && !set.contains(region_tiles, c)
+    })
+
+  do_region_edges(region_tiles, to_visit, visited, corners + convex + concave)
 }
 
 fn build_regions(raw_map: RawMap) -> List(Region) {
@@ -107,7 +179,7 @@ fn do_build_regions(
 
   let #(region_neighbors, nonregion_neighbors) =
     visiting
-    |> neighbors()
+    |> cardinal_neighbors()
     |> list.filter_map(fn(position) {
       raw_map.tiles
       |> dict.get(position)
@@ -146,13 +218,45 @@ fn do_build_regions(
   }
 }
 
-fn neighbors(position: Position) -> List(Position) {
+fn cardinal_neighbors(position: Position) -> List(Position) {
   [
-    Position(..position, row: position.row + 1),
-    Position(..position, row: position.row - 1),
-    Position(..position, col: position.col + 1),
-    Position(..position, col: position.col - 1),
+    up_neighbor(position),
+    down_neighbor(position),
+    left_neighbor(position),
+    right_neighbor(position),
   ]
+}
+
+fn up_neighbor(position: Position) -> Position {
+  Position(..position, row: position.row - 1)
+}
+
+fn down_neighbor(position: Position) -> Position {
+  Position(..position, row: position.row + 1)
+}
+
+fn left_neighbor(position: Position) -> Position {
+  Position(..position, col: position.col - 1)
+}
+
+fn right_neighbor(position: Position) -> Position {
+  Position(..position, col: position.col + 1)
+}
+
+fn up_left_neighbor(position: Position) -> Position {
+  Position(row: position.row - 1, col: position.col - 1)
+}
+
+fn up_right_neighbor(position: Position) -> Position {
+  Position(row: position.row - 1, col: position.col + 1)
+}
+
+fn down_left_neighbor(position: Position) -> Position {
+  Position(row: position.row + 1, col: position.col - 1)
+}
+
+fn down_right_neighbor(position: Position) -> Position {
+  Position(row: position.row + 1, col: position.col + 1)
 }
 
 fn parse_input(input: String) -> RawMap {
