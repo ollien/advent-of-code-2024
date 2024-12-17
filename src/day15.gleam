@@ -12,16 +12,8 @@ type Position {
   Position(row: Int, col: Int)
 }
 
-type Dimensions {
-  Dimensions(height: Int, width: Int)
-}
-
 type Map {
-  Map(
-    dimensions: Dimensions,
-    obstacles: dict.Dict(Position, Hull),
-    robot: Position,
-  )
+  Map(obstacles: dict.Dict(Position, Hull), robot: Position)
 }
 
 type Hull {
@@ -106,7 +98,6 @@ fn lookup_obstacle(
 }
 
 fn hull_neighbors_in_direction(
-  map: Map,
   hull: Hull,
   root: Position,
   direction: Direction,
@@ -180,7 +171,7 @@ fn locate_affected_obstacles(
   root: Position,
   direction: Direction,
 ) -> Result(List(#(Position, Hull)), Nil) {
-  let neighbors = hull_neighbors_in_direction(map, hull, root, direction)
+  let neighbors = hull_neighbors_in_direction(hull, root, direction)
   let neighboring_obstacles =
     list.filter_map(neighbors, fn(neighbor) { lookup_obstacle(map, neighbor) })
   let grouped_obstacles =
@@ -302,7 +293,6 @@ fn do_parse_input(
 
 fn parse_map(input: String) -> Result(Map, String) {
   let input_lines = string.split(input, "\n")
-  use dimensions <- result.try(measure_input(input_lines))
 
   let #(obstacle_hulls, robots, unknown) =
     list.index_fold(
@@ -360,7 +350,7 @@ fn parse_map(input: String) -> Result(Map, String) {
     ),
   )
 
-  Ok(Map(dimensions:, obstacles: obstacle_hulls, robot:))
+  Ok(Map(obstacles: obstacle_hulls, robot:))
 }
 
 fn parse_directions(input: String) -> Result(List(Direction), String) {
@@ -376,20 +366,6 @@ fn parse_directions(input: String) -> Result(List(Direction), String) {
       _ -> Error("Unknown direction char " <> char)
     }
   })
-}
-
-fn measure_input(input_lines: List(String)) -> Result(Dimensions, String) {
-  use first_line, rest_lines <- pop_or(
-    input_lines,
-    or: Ok(Dimensions(height: 0, width: 0)),
-  )
-
-  let height = list.length(input_lines)
-  let width = string.length(first_line)
-  case list.all(rest_lines, fn(line) { string.length(line) == width }) {
-    True -> Ok(Dimensions(height:, width:))
-    False -> Error("Input must be rectangular")
-  }
 }
 
 fn pop_or(items: List(a), or or: b, then continue: fn(a, List(a)) -> b) -> b {
