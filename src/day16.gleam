@@ -5,9 +5,9 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option
+import gleam/order
 import gleam/result
 import gleam/string
-import gleamy/map
 import gleamy/priority_queue
 
 type Position {
@@ -43,47 +43,82 @@ pub fn main() {
 fn run(input: String) -> Result(Nil, String) {
   use #(map, start, end) <- result.try(parse_input(input))
 
-  io.println("Part 1: " <> part1(map, start, end))
+  let res =
+    shortest_paths_cost(map, Reindeer(position: start, direction: Right), end)
+  case res {
+    option.None -> io.println("No solution found")
+    option.Some(#(part1, part2)) -> {
+      io.println("Part 1: " <> int.to_string(part1))
+      io.println("Part 2: " <> int.to_string(part2))
+    }
+  }
+
   Ok(Nil)
 }
 
-fn part1(map: Map, start: Position, end: Position) -> String {
-  shortest_path_cost(map, Reindeer(position: start, direction: Right), end)
-  |> option.map(int.to_string)
-  |> option.unwrap(or: "No solution found")
-}
-
-fn shortest_path_cost(
+fn shortest_paths_cost(
   map: Map,
   start_state: Reindeer,
   end: Position,
-) -> option.Option(Int) {
+) -> option.Option(#(Int, Int)) {
   let to_visit =
     priority_queue.new(fn(a: #(Int, Reindeer), b: #(Int, Reindeer)) {
       int.compare(a.0, b.0)
     })
+  let #(solved_cost, parents) =
+    do_shortest_path_cost(
+      map,
+      end,
+      priority_queue.push(to_visit, #(0, start_state)),
+      dict.new(),
+      dict.from_list([#(start_state, 0)]),
+    )
 
-  do_shortest_path_cost(
-    map,
-    end,
-    priority_queue.push(to_visit, #(0, start_state)),
-    dict.from_list([#(start_state, 0)]),
-  )
+  option.map(solved_cost, fn(cost) {
+    let assert Ok(parent_reindeer) =
+      dict.keys(parents)
+      |> list.find(fn(parent) { parent.position == end })
+
+    let num_shortest_path_locations =
+      shortest_paths_locations(parent_reindeer, start_state.position, parents)
+      |> list.unique()
+      |> list.length()
+
+    #(cost, num_shortest_path_locations)
+  })
+}
+
+fn shortest_paths_locations(
+  end: Reindeer,
+  start: Position,
+  parents: dict.Dict(Reindeer, List(Reindeer)),
+) -> List(Position) {
+  use <- bool.guard(end.position == start, return: [])
+  dict.get(parents, end)
+  |> result.unwrap(or: [])
+  |> list.fold(from: [end.position], with: fn(acc, parent) {
+    list.flatten([
+      [parent.position, ..acc],
+      shortest_paths_locations(parent, start, parents),
+    ])
+  })
 }
 
 fn do_shortest_path_cost(
   map: Map,
   end: Position,
   to_visit: priority_queue.Queue(#(Int, Reindeer)),
+  parents: dict.Dict(Reindeer, List(Reindeer)),
   costs: dict.Dict(Reindeer, Int),
-) -> option.Option(Int) {
-  use #(#(distance, reindeer), to_visit) <- option.then(
-    priority_queue.pop(to_visit) |> option.from_result,
-  )
-  use <- bool.guard(
-    reindeer.position == end,
-    return: dict.get(costs, reindeer) |> option.from_result(),
-  )
+) -> #(option.Option(Int), dict.Dict(Reindeer, List(Reindeer))) {
+  let popped = priority_queue.pop(to_visit) |> option.from_result
+  use <- bool.guard(!option.is_some(popped), return: #(option.None, parents))
+  let assert option.Some(#(#(distance, reindeer), to_visit)) = popped
+
+  use <- bool.guard(reindeer.position == end, return: #(
+    dict.get(costs, reindeer) |> option.from_result(),
+    parents,
+  ))
 
   let valid_neighbor_costs =
     reindeer
@@ -94,30 +129,42 @@ fn do_shortest_path_cost(
       |> result.unwrap(or: False)
     })
 
-  let #(to_visit, costs) =
+  let #(to_visit, costs, parents) =
     dict.fold(
       valid_neighbor_costs,
-      from: #(to_visit, costs),
+      from: #(to_visit, costs, parents),
       with: fn(entry, neighbor, edge_cost) {
-        let #(to_visit, costs) = entry
-        let neighbor_cheaper =
+        let #(to_visit, costs, parents) = entry
+        let neighbor_cost_cmp =
           dict.get(costs, neighbor)
           |> result.map(fn(neighbor_cost) {
-            distance + edge_cost < neighbor_cost
+            int.compare(distance + edge_cost, neighbor_cost)
           })
-          |> result.unwrap(or: True)
+          |> result.unwrap(or: order.Lt)
 
-        case neighbor_cheaper {
-          True -> #(
+        case neighbor_cost_cmp {
+          order.Lt -> #(
             priority_queue.push(to_visit, #(distance + edge_cost, neighbor)),
             dict.insert(costs, neighbor, distance + edge_cost),
+            dict.insert(parents, neighbor, [reindeer]),
           )
-          False -> #(to_visit, costs)
+          order.Eq -> {
+            // io.debug(#(reindeer, neighbor, distance + edge_cost))
+            #(
+              to_visit,
+              costs,
+              dict.upsert(parents, neighbor, fn(maybe) {
+                let local_parents = option.unwrap(maybe, or: [])
+                [reindeer, ..local_parents]
+              }),
+            )
+          }
+          order.Gt -> #(to_visit, costs, parents)
         }
       },
     )
 
-  do_shortest_path_cost(map, end, to_visit, costs)
+  do_shortest_path_cost(map, end, to_visit, parents, costs)
 }
 
 fn parse_input(input: String) -> Result(#(Map, Position, Position), String) {
@@ -173,7 +220,7 @@ fn parse_input(input: String) -> Result(#(Map, Position, Position), String) {
               )
             }
             "S" -> #(
-              dict.insert(tiles, position, EndTile),
+              dict.insert(tiles, position, StartTile),
               unknown,
               Ok(option.Some(position)),
               end,
@@ -225,15 +272,6 @@ fn neighbor_costs(reindeer: Reindeer) -> dict.Dict(Reindeer, Int) {
     #(Reindeer(position:, direction:), cost)
   })
   |> dict.from_list()
-}
-
-fn move_in_direction(position: Position, direction: Direction) -> Position {
-  case direction {
-    Up -> Position(..position, row: position.row - 1)
-    Down -> Position(..position, row: position.row + 1)
-    Left -> Position(..position, col: position.col - 1)
-    Right -> Position(..position, col: position.col + 1)
-  }
 }
 
 fn neighbors(position: Position) -> dict.Dict(Position, Direction) {
