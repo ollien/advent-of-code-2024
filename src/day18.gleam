@@ -55,12 +55,7 @@ fn part1(positions: List(Position)) -> String {
 }
 
 fn part2(positions: List(Position)) -> String {
-  let #(front, back) = #(
-    list.take(positions, init_elements),
-    list.drop(positions, init_elements),
-  )
-
-  case do_part_2(set.from_list(front), back) {
+  case do_part_2(positions, init_elements, list.length(positions)) {
     Ok(position) ->
       int.to_string(position.col) <> "," <> int.to_string(position.row)
     Error(Nil) -> "No solution found"
@@ -68,12 +63,24 @@ fn part2(positions: List(Position)) -> String {
 }
 
 fn do_part_2(
-  obstacles: set.Set(Position),
   positions: List(Position),
+  left: Int,
+  right: Int,
 ) -> Result(Position, Nil) {
-  use new_position, positions <- try_pop(positions, Error(Nil))
+  let midpoint = { left + right } / 2
+  use <- bool.lazy_guard(left > right, fn() {
+    case list.drop(positions, left) {
+      [result, ..] -> Ok(result)
+      [] -> Error(Nil)
+    }
+  })
 
-  let obstacles = set.insert(obstacles, new_position)
+  // We use the midpoint as the point to pull "up to".
+  let obstacles =
+    positions
+    |> list.take(midpoint + 1)
+    |> set.from_list()
+
   let steps_result =
     bfs(
       deque.from_list([Step(position: Position(row: 0, col: 0), depth: 0)]),
@@ -83,8 +90,8 @@ fn do_part_2(
     )
 
   case steps_result {
-    Ok(_n) -> do_part_2(obstacles, positions)
-    Error(Nil) -> Ok(new_position)
+    Ok(_n) -> do_part_2(positions, midpoint + 1, right)
+    Error(Nil) -> do_part_2(positions, left, midpoint - 1)
   }
 }
 
@@ -163,15 +170,6 @@ fn try_pop_front(
     Error(Nil) -> or
     Ok(#(front, rest)) -> {
       next(front, rest)
-    }
-  }
-}
-
-fn try_pop(list list: List(a), or or: b, next next: fn(a, List(a)) -> b) -> b {
-  case list {
-    [] -> or
-    [head, ..rest] -> {
-      next(head, rest)
     }
   }
 }
