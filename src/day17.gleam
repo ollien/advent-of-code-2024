@@ -47,9 +47,10 @@ pub fn main() {
 }
 
 fn run(input: String) -> Result(Nil, String) {
-  use parsed_input <- result.try(parse_input(input))
+  use #(registers, #(raw_program, program)) <- result.try(parse_input(input))
 
-  io.println("Part 1: " <> part1(parsed_input.0, parsed_input.1))
+  io.println("Part 1: " <> part1(registers, program))
+  io.println("Part 2: " <> part2(raw_program))
 
   Ok(Nil)
 }
@@ -60,6 +61,74 @@ fn part1(registers: Registers, program: Program) -> String {
   outputs
   |> list.map(int.to_string)
   |> string.join(",")
+}
+
+fn part2(raw_program: List(Int)) -> String {
+  let assert Ok(n) = do_part_2(1, list.reverse(raw_program), [])
+
+  n
+  |> int.to_string()
+}
+
+fn do_part_2(
+  init: Int,
+  needed: List(Int),
+  acquired: List(Int),
+) -> Result(Int, Nil) {
+  use need_now, need_later <- try_pop(needed, Ok(init / 8))
+
+  do_part_2_step(init, init + 8, need_now, acquired, fn(n) {
+    do_part_2(n * 8, need_later, [calculate_b(n) % 8, ..acquired])
+  })
+}
+
+fn do_part_2_step(
+  n: Int,
+  max: Int,
+  needed: Int,
+  acquired: List(Int),
+  continue: fn(Int) -> Result(Int, Nil),
+) -> Result(Int, Nil) {
+  use <- bool.guard(n > max, Error(Nil))
+
+  let result = calculate_b(n) % 8
+  use <- bool.lazy_guard(
+    result != needed || my_program(n) != [result, ..acquired],
+    fn() { do_part_2_step(n + 1, max, needed, acquired, continue) },
+  )
+
+  case continue(n) {
+    Error(Nil) -> {
+      do_part_2_step(n + 1, max, needed, acquired, continue)
+    }
+    Ok(found) -> Ok(found)
+  }
+}
+
+fn my_program(a: Int) -> List(Int) {
+  a
+  |> do_my_program([])
+  |> list.reverse()
+}
+
+fn do_my_program(a: Int, out: List(Int)) -> List(Int) {
+  let b = calculate_b(a)
+
+  case a / 8 {
+    0 -> [b % 8, ..out]
+    n -> do_my_program(n, [b % 8, ..out])
+  }
+}
+
+// This, and my_program, are specialized to my input
+fn calculate_b(a: Int) -> Int {
+  let b = a % 8
+  let b = int.bitwise_exclusive_or(b, 7)
+  let c = a / int_pow(2, b)
+  let b = int.bitwise_exclusive_or(b, 7)
+  let b = int.bitwise_exclusive_or(b, c)
+
+  b
 }
 
 fn run_program(registers: Registers, program: Program) -> List(Int) {
@@ -188,7 +257,7 @@ fn run_instruction(
 fn evaluate_div_instruction(registers: Registers, operand: ComboOperand) -> Int {
   let combo_value = evaluate_combo_operand(registers, operand)
 
-  registers.a / pow_2(combo_value)
+  registers.a / int_pow(2, combo_value)
 }
 
 fn evaluate_combo_operand(registers: Registers, operand: ComboOperand) -> Int {
@@ -200,14 +269,16 @@ fn evaluate_combo_operand(registers: Registers, operand: ComboOperand) -> Int {
   }
 }
 
-pub fn pow_2(n: Int) -> Int {
+pub fn int_pow(base: Int, n: Int) -> Int {
   use <- bool.guard(n < 0, 0)
   use <- bool.guard(n == 0, 1)
 
-  2 * pow_2(n - 1)
+  base * int_pow(base, n - 1)
 }
 
-fn parse_input(input: String) -> Result(#(Registers, Program), String) {
+fn parse_input(
+  input: String,
+) -> Result(#(Registers, #(List(Int), Program)), String) {
   let chunks =
     input
     |> string.trim_end()
@@ -216,9 +287,9 @@ fn parse_input(input: String) -> Result(#(Registers, Program), String) {
   case chunks {
     [register_chunk, program_chunk] -> {
       use registers <- result.try(parse_registers(register_chunk))
-      use program <- result.try(parse_program(program_chunk))
+      use #(raw_program, program) <- result.try(parse_program(program_chunk))
 
-      Ok(#(registers, program))
+      Ok(#(registers, #(raw_program, program)))
     }
     _ -> Error("Input must contain an input chunk and a program chunk")
   }
@@ -253,7 +324,7 @@ fn parse_register(line: String, name: String) -> Result(Int, String) {
   |> result.map_error(fn(_nil) { "Invalid register value " <> raw_value })
 }
 
-fn parse_program(program_input: String) -> Result(Program, String) {
+fn parse_program(program_input: String) -> Result(#(List(Int), Program), String) {
   let prefix = "Program: "
   use <- bool.guard(
     !string.starts_with(program_input, prefix),
@@ -281,10 +352,13 @@ fn parse_program(program_input: String) -> Result(Program, String) {
     }
   })
   |> result.map(fn(instructions) {
-    instructions
-    |> list.index_map(fn(instruction, idx) { #(idx * 2, instruction) })
-    |> dict.from_list()
-    |> Program()
+    let program =
+      instructions
+      |> list.index_map(fn(instruction, idx) { #(idx * 2, instruction) })
+      |> dict.from_list()
+      |> Program()
+
+    #(input_values, program)
   })
 }
 
@@ -310,5 +384,14 @@ fn parse_combo_operand(operand: Int) -> Result(ComboOperand, String) {
     6 -> Ok(RegisterCComboOperand)
     7 -> Error("Combo operand 7 should never appear")
     _ -> Error("Invalid combo operand: " <> int.to_string(operand))
+  }
+}
+
+fn try_pop(list list: List(a), or or: b, next next: fn(a, List(a)) -> b) -> b {
+  case list {
+    [] -> or
+    [head, ..rest] -> {
+      next(head, rest)
+    }
   }
 }
