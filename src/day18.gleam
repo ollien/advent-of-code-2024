@@ -12,6 +12,8 @@ const max_row: Int = 70
 
 const max_col: Int = 70
 
+const init_elements: Int = 1024
+
 type Position {
   Position(row: Int, col: Int)
 }
@@ -28,14 +30,14 @@ fn run(input: String) -> Result(Nil, String) {
   use positions <- result.try(parse_input(input))
 
   io.println("Part 1: " <> part1(positions))
-  io.println("Part 1: " <> part2(positions))
+  io.println("Part 2: " <> part2(positions))
   Ok(Nil)
 }
 
 fn part1(positions: List(Position)) -> String {
   let obstacles =
     positions
-    |> list.take(1024)
+    |> list.take(init_elements)
     |> set.from_list()
 
   let steps_result =
@@ -53,11 +55,12 @@ fn part1(positions: List(Position)) -> String {
 }
 
 fn part2(positions: List(Position)) -> String {
-  let #(front_1024, back) = #(
-    list.take(positions, 1024),
-    list.drop(positions, 1024),
+  let #(front, back) = #(
+    list.take(positions, init_elements),
+    list.drop(positions, init_elements),
   )
-  case do_part_2(set.from_list(front_1024), back) {
+
+  case do_part_2(set.from_list(front), back) {
     Ok(position) ->
       int.to_string(position.col) <> "," <> int.to_string(position.row)
     Error(Nil) -> "No solution found"
