@@ -4,6 +4,7 @@ import gleam/dict
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/otp/task
 import gleam/result
 import gleam/string
 
@@ -18,22 +19,31 @@ pub fn main() {
 fn run(input: String) -> Result(Nil, String) {
   use input <- result.try(parse_input(input))
 
-  io.println("Part 1: " <> part1(input))
-  io.println("Part 2: " <> part2(input))
+  let #(part1, part2) = solve(input)
+  io.println("Part 1: " <> part1)
+  io.println("Part 2: " <> part2)
   Ok(Nil)
 }
 
-fn part1(input: Input) -> String {
-  input.designs
-  |> list.count(fn(design) { ways_to_make_design(design, input.patterns) > 0 })
-  |> int.to_string()
-}
+fn solve(input: Input) -> #(String, String) {
+  let counts =
+    input.designs
+    |> list.map(fn(design) {
+      task.async(fn() { ways_to_make_design(design, input.patterns) })
+    })
+    |> list.map(task.await_forever)
 
-fn part2(input: Input) -> String {
-  input.designs
-  |> list.map(fn(design) { ways_to_make_design(design, input.patterns) })
-  |> int.sum()
-  |> int.to_string()
+  let part1 =
+    counts
+    |> list.count(fn(count) { count > 0 })
+    |> int.to_string()
+
+  let part2 =
+    counts
+    |> int.sum()
+    |> int.to_string()
+
+  #(part1, part2)
 }
 
 fn ways_to_make_design(design: String, patterns: List(String)) -> Int {
