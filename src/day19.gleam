@@ -25,7 +25,7 @@ fn run(input: String) -> Result(Nil, String) {
 
 fn part1(input: Input) -> String {
   input.designs
-  |> list.count(fn(design) { can_make_design(design, input.patterns) })
+  |> list.count(fn(design) { ways_to_make_design(design, input.patterns) > 0 })
   |> int.to_string()
 }
 
@@ -34,43 +34,6 @@ fn part2(input: Input) -> String {
   |> list.map(fn(design) { ways_to_make_design(design, input.patterns) })
   |> int.sum()
   |> int.to_string()
-}
-
-fn can_make_design(design: String, patterns: List(String)) -> Bool {
-  let #(result, _memo) = do_can_make_design(design, patterns, dict.new())
-
-  result
-}
-
-fn do_can_make_design(
-  design: String,
-  patterns: List(String),
-  memo: dict.Dict(String, Bool),
-) -> #(Bool, dict.Dict(String, Bool)) {
-  use <- bool.guard(design == "", #(True, memo))
-  use <- from_memo(memo, design)
-
-  let #(found, memo) =
-    list.fold_until(patterns, from: #(False, memo), with: fn(acc, pattern) {
-      let #(_found, memo) = acc
-
-      use <- bool.guard(
-        !string.starts_with(design, pattern),
-        list.Continue(#(False, memo)),
-      )
-
-      let #(res, memo) =
-        design
-        |> string.drop_start(string.length(pattern))
-        |> do_can_make_design(patterns, memo)
-
-      case res {
-        True -> list.Stop(#(True, memo))
-        False -> list.Continue(#(False, memo))
-      }
-    })
-
-  #(found, dict.insert(memo, design, found))
 }
 
 fn ways_to_make_design(design: String, patterns: List(String)) -> Int {
