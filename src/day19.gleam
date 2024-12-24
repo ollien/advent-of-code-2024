@@ -19,12 +19,20 @@ fn run(input: String) -> Result(Nil, String) {
   use input <- result.try(parse_input(input))
 
   io.println("Part 1: " <> part1(input))
+  io.println("Part 2: " <> part2(input))
   Ok(Nil)
 }
 
 fn part1(input: Input) -> String {
   input.designs
   |> list.count(fn(design) { can_make_design(design, input.patterns) })
+  |> int.to_string()
+}
+
+fn part2(input: Input) -> String {
+  input.designs
+  |> list.map(fn(design) { ways_to_make_design(design, input.patterns) })
+  |> int.sum()
   |> int.to_string()
 }
 
@@ -65,14 +73,49 @@ fn do_can_make_design(
   #(found, dict.insert(memo, design, found))
 }
 
+fn ways_to_make_design(design: String, patterns: List(String)) -> Int {
+  let #(result, _memo) = do_ways_to_make_design(design, patterns, dict.new())
+
+  result
+}
+
+fn do_ways_to_make_design(
+  design: String,
+  patterns: List(String),
+  memo: dict.Dict(String, Int),
+) -> #(Int, dict.Dict(String, Int)) {
+  use <- bool.guard(design == "", #(1, memo))
+  use <- from_memo(memo, design)
+
+  let #(ways, memo) =
+    list.fold(patterns, from: #(0, memo), with: fn(acc, pattern) {
+      let #(found, memo) = acc
+
+      use <- bool.guard(!string.starts_with(design, pattern), #(found, memo))
+
+      let #(sub_ways, memo) =
+        design
+        |> string.drop_start(string.length(pattern))
+        |> do_ways_to_make_design(patterns, memo)
+
+      #(sub_ways + found, memo)
+    })
+
+  #(ways, dict.insert(memo, design, ways))
+}
+
 fn from_memo(
   memo memo: dict.Dict(a, b),
   key key: a,
   then continue: fn() -> #(b, dict.Dict(a, b)),
 ) -> #(b, dict.Dict(a, b)) {
   case dict.get(memo, key) {
-    Ok(val) -> #(val, memo)
-    Error(Nil) -> continue()
+    Ok(val) -> {
+      #(val, memo)
+    }
+    Error(Nil) -> {
+      continue()
+    }
   }
 }
 
