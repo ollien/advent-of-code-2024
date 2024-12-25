@@ -37,8 +37,7 @@ fn part1(map: Map) -> String {
     Error(err) -> err
     Ok(path) -> {
       find_cheat_paths(path, 2)
-      |> dict.values()
-      |> list.count(fn(distance) { distance >= 100 })
+      |> dict.size()
       |> int.to_string()
     }
   }
@@ -53,8 +52,7 @@ fn part2(map: Map) -> String {
         find_cheat_paths(path, radius)
         |> dict.combine(acc, int.max)
       })
-      |> dict.values()
-      |> list.count(fn(distance) { distance >= 100 })
+      |> dict.size()
       |> int.to_string()
     }
   }
@@ -90,10 +88,10 @@ fn do_find_cheat_paths(
       let cheat_distance = path_head.distance_from_start + radius
 
       case cheat_distance < fair_distance {
-        True -> {
+        True if fair_distance - cheat_distance >= 100 -> {
           Ok(#(#(path_head.position, candidate), fair_distance - cheat_distance))
         }
-        False -> Error(Nil)
+        _ -> Error(Nil)
       }
     })
     |> list.fold(from: acc, with: fn(acc, cheat) {
