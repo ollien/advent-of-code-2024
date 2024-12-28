@@ -1,8 +1,10 @@
 import advent_of_code_2024
-import gleam/dict
+import bravo
+import bravo/uset
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/otp/task
 import gleam/result
 import gleam/set
 import gleam/string
@@ -31,48 +33,71 @@ fn part1(numbers: List(Int)) -> String {
 
 fn part2(numbers: List(Int)) -> String {
   let window_prices =
-    list.map(numbers, fn(number) { delta_windows_to_prices(number) })
+    numbers
+    |> list.map(fn(number) {
+      let assert Ok(table) =
+        uset.new("part2-" <> int.to_string(number), 1, bravo.Public)
+
+      task.async(fn() { delta_windows_to_prices(table, number) })
+    })
+    |> list.map(task.await_forever)
 
   let all_windows =
     window_prices
-    |> list.flat_map(dict.keys)
+    |> list.flat_map(fn(table) {
+      table
+      |> uset.tab2list()
+      |> list.map(fn(entry) { entry.0 })
+    })
     |> set.from_list()
 
   all_windows
   |> set.to_list()
   |> list.map(fn(window) {
-    window_prices
-    |> list.map(fn(prices) {
-      prices
-      |> dict.get(window)
-      |> result.unwrap(or: 0)
+    task.async(fn() {
+      window_prices
+      |> list.map(fn(prices) {
+        prices
+        |> uset.lookup(window)
+        |> result.map(fn(entry) { entry.1 })
+        |> result.unwrap(or: 0)
+      })
+      |> int.sum()
     })
-    |> int.sum()
   })
+  |> list.map(task.await_forever)
   |> list.reduce(int.max)
   |> result.map(int.to_string)
   |> result.unwrap(or: "No solution found")
 }
 
-fn delta_windows_to_prices(number: Int) -> dict.Dict(Quad, Int) {
+fn delta_windows_to_prices(
+  table: uset.USet(#(Quad, Int)),
+  number: Int,
+) -> uset.USet(#(Quad, Int)) {
   let prices =
     number
     |> n_numbers(2000)
     |> list.map(fn(n) { n % 10 })
 
-  prices
-  |> deltas()
-  |> list.window(4)
-  |> list.map(fn(list) {
-    let assert [a, b, c, d] = list
+  let entries =
+    prices
+    |> deltas()
+    |> list.window(4)
+    |> list.map(fn(list) {
+      let assert [a, b, c, d] = list
 
-    #(a, b, c, d)
-  })
-  |> list.zip(list.drop(prices, 4))
-  // Must remove duplicate ranges in order to only react on the first seen sequence
-  // (otherwise our result is not deterministic)
-  |> keep_first_dupe_keys()
-  |> dict.from_list()
+      #(a, b, c, d)
+    })
+    |> list.zip(list.drop(prices, 4))
+    // Must remove duplicate ranges in order to only react on the first seen sequence
+    // We could use uset.insert_new, but in testing this is slower, and I assume it has
+    // to do with the FFI overhead for an ETS insert
+    |> keep_first_dupe_keys()
+
+  uset.insert(table, entries)
+
+  table
 }
 
 fn keep_first_dupe_keys(list: List(#(a, b))) {

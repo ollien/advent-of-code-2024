@@ -3,6 +3,7 @@
 
 packages = [
   { name = "argv", version = "1.0.2", build_tools = ["gleam"], requirements = [], otp_app = "argv", source = "hex", outer_checksum = "BA1FF0929525DEBA1CE67256E5ADF77A7CDDFE729E3E3F57A5BDCAA031DED09D" },
+  { name = "bravo", version = "4.0.1", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_stdlib"], otp_app = "bravo", source = "hex", outer_checksum = "D450DCD5A896ADDE442A93A7D6B5B2785374579A35416819E29E024887C2A872" },
   { name = "carpenter", version = "0.3.1", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_stdlib"], otp_app = "carpenter", source = "hex", outer_checksum = "7F5AF15A315CF32E8EDD0700BC1E6711618F8049AFE66DFCE82D1161B33F7F1B" },
   { name = "colours", version = "0.3.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "colours", source = "hex", outer_checksum = "217E1F62013276D9D29192F97F136B5BA830129F2FD5B5D51DCC183B64223F3B" },
   { name = "filepath", version = "1.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "filepath", source = "hex", outer_checksum = "67A6D15FB39EEB69DD31F8C145BB5A421790581BD6AA14B33D64D5A55DBD6587" },
@@ -29,6 +30,7 @@ packages = [
 
 [requirements]
 argv = { version = ">= 1.0.2 and < 2.0.0" }
+bravo = { version = ">= 4.0.1 and < 5.0.0" }
 colours = { version = ">= 0.3.0 and < 1.0.0" }
 gleam_deque = { version = ">= 1.0.0 and < 2.0.0" }
 gleam_erlang = { version = ">= 0.33.0 and < 1.0.0" }
