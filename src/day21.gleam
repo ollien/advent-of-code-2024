@@ -59,39 +59,32 @@ fn do_part1(codes: List(String)) -> Result(String, String) {
 }
 
 fn solve_code(code: String) -> Result(Int, String) {
-  use paths <- result.try(make_paths_to_enter(make_numpad(), code))
-  list.each(paths, fn(path) { print_path(path) })
-
-  use paths2 <- result.try(
-    paths
-    |> list.try_map(fn(path) {
-      make_paths_to_enter(make_directional_pad(), path_to_string(path))
-    })
-    |> result.map(list.flatten),
+  use numpad_paths <- result.try(make_paths_to_enter(make_numpad(), code))
+  use numeric_part <- result.try(
+    code
+    |> string.drop_end(1)
+    |> int.parse()
+    |> result.map_error(fn(_nil) { "Invalid numeric part of code" }),
   )
 
-  use paths3 <- result.try(
-    paths2
-    |> list.try_map(fn(path) {
-      make_paths_to_enter(make_directional_pad(), path_to_string(path))
+  list.try_map(numpad_paths, fn(path) {
+    path
+    |> path_to_string()
+    |> string.to_graphemes()
+    |> list.prepend("A")
+    |> list.window_by_2()
+    |> list.try_map(fn(pair) {
+      let #(from, to) = pair
+      make_shortest_path_to_press_key(make_directional_pad(), from, to, 2)
+      |> result.map(list.length)
     })
-    |> result.map(list.flatten),
-  )
-
-  paths3
-  |> list.map(list.length)
-  |> list.reduce(int.min)
-  |> result.map_error(fn(_nil) { "No solution found" })
-  |> result.then(fn(steps) {
-    let parse_result =
-      code
-      |> string.drop_end(1)
-      |> int.parse()
-
-    case parse_result {
-      Error(Nil) -> Error("Invalid code " <> code)
-      Ok(code) -> Ok(steps * code)
-    }
+    |> result.map(int.sum)
+  })
+  |> result.then(fn(lengths) {
+    lengths
+    |> list.map(fn(length) { length * numeric_part })
+    |> list.reduce(int.min)
+    |> result.map_error(fn(__nil) { "No solutions found" })
   })
 }
 
@@ -161,6 +154,60 @@ fn make_paths_to_enter(
       Error(err) -> list.Stop(Error(err))
     }
   })
+}
+
+fn make_paths_to_enter_times(
+  keypad: Keypad,
+  sequence: String,
+  times: Int,
+) -> Result(List(List(Action)), String) {
+  use <- bool.guard(
+    when: times <= 0,
+    return: Error("Must have at least one iteration of keypress"),
+  )
+
+  use paths <- result.try(make_paths_to_enter(keypad, sequence))
+
+  paths
+  |> list.try_map(fn(path) {
+    case times {
+      1 -> Ok([path])
+      _ -> make_paths_to_enter_times(keypad, path_to_string(path), times - 1)
+    }
+  })
+  |> result.map(list.flatten)
+}
+
+fn make_shortest_path_to_press_key(
+  keypad keypad: Keypad,
+  from start: String,
+  to target: String,
+  times n: Int,
+) -> Result(List(Action), String) {
+  use <- bool.guard(
+    when: n <= 0,
+    return: Error("Must have at least one iteration of keypress"),
+  )
+
+  use paths <- result.try(make_paths_to_press_key(keypad, start, target))
+
+  let subpath_result =
+    paths
+    |> list.try_map(fn(path) {
+      let path_string = path_to_string(path)
+
+      make_paths_to_enter_times(make_directional_pad(), path_string, n - 1)
+    })
+    |> result.map(list.flatten)
+
+  use subpaths <- result.try(subpath_result)
+  list.reduce(subpaths, fn(a, b) {
+    case list.length(a) < list.length(b) {
+      True -> a
+      False -> b
+    }
+  })
+  |> result.map_error(fn(_nil) { "No paths found " })
 }
 
 fn make_paths_to_press_key(
