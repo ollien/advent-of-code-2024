@@ -74,19 +74,24 @@ fn cliques_of_size(
 
     all
     |> list.combinations(size)
-    |> list.filter(fn(combinations) {
-      combinations
-      |> list.combination_pairs()
-      |> list.all(fn(pair) {
-        adjacencies
-        |> dict.get(pair.0)
-        |> result.unwrap(or: set.new())
-        |> set.contains(pair.1)
-      })
-    })
+    |> list.filter(fn(combinations) { all_connected(adjacencies, combinations) })
   })
   |> list.map(fn(clique) { list.sort(clique, string.compare) })
   |> set.from_list()
+}
+
+fn all_connected(
+  adjacencies: dict.Dict(String, set.Set(String)),
+  computers: List(String),
+) -> Bool {
+  computers
+  |> list.combination_pairs()
+  |> list.all(fn(pair) {
+    adjacencies
+    |> dict.get(pair.0)
+    |> result.unwrap(or: set.new())
+    |> set.contains(pair.1)
+  })
 }
 
 fn set_count(set: set.Set(a), counter: fn(a) -> Bool) -> Int {
