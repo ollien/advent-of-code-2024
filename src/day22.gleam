@@ -1,9 +1,14 @@
 import advent_of_code_2024
+import gleam/dict
 import gleam/int
 import gleam/io
 import gleam/list
 import gleam/result
+import gleam/set
 import gleam/string
+
+type Quad =
+  #(Int, Int, Int, Int)
 
 pub fn main() {
   advent_of_code_2024.run_with_input_file(run)
@@ -13,6 +18,7 @@ fn run(input: String) -> Result(Nil, String) {
   use numbers <- result.try(parse_input(input))
 
   io.println("Part 1: " <> part1(numbers))
+  io.println("Part 2: " <> part2(numbers))
   Ok(Nil)
 }
 
@@ -21,6 +27,93 @@ fn part1(numbers: List(Int)) -> String {
   |> list.map(fn(number) { nth_number(number, 2000) })
   |> int.sum()
   |> int.to_string()
+}
+
+fn part2(numbers: List(Int)) -> String {
+  let window_prices =
+    list.map(numbers, fn(number) { delta_windows_to_prices(number) })
+
+  let all_windows =
+    window_prices
+    |> list.flat_map(dict.keys)
+    |> set.from_list()
+
+  all_windows
+  |> set.to_list()
+  |> list.map(fn(window) {
+    window_prices
+    |> list.map(fn(prices) {
+      prices
+      |> dict.get(window)
+      |> result.unwrap(or: 0)
+    })
+    |> int.sum()
+  })
+  |> list.reduce(int.max)
+  |> result.map(int.to_string)
+  |> result.unwrap(or: "No solution found")
+}
+
+fn delta_windows_to_prices(number: Int) -> dict.Dict(Quad, Int) {
+  let prices =
+    number
+    |> n_numbers(2000)
+    |> list.map(fn(n) { n % 10 })
+
+  prices
+  |> deltas()
+  |> list.window(4)
+  |> list.map(fn(list) {
+    let assert [a, b, c, d] = list
+
+    #(a, b, c, d)
+  })
+  |> list.zip(list.drop(prices, 4))
+  // Must remove duplicate ranges in order to only react on the first seen sequence
+  // (otherwise our result is not deterministic)
+  |> keep_first_dupe_keys()
+  |> dict.from_list()
+}
+
+fn keep_first_dupe_keys(list: List(#(a, b))) {
+  do_keep_first_dupe_keys(list, set.new(), [])
+}
+
+fn do_keep_first_dupe_keys(
+  list: List(#(a, b)),
+  seen: set.Set(a),
+  acc: List(#(a, b)),
+) {
+  case list {
+    [] -> acc
+    [#(a, b), ..rest] -> {
+      case set.contains(seen, a) {
+        True -> do_keep_first_dupe_keys(rest, seen, acc)
+        False ->
+          do_keep_first_dupe_keys(rest, set.insert(seen, a), [#(a, b), ..acc])
+      }
+    }
+  }
+}
+
+fn deltas(nums: List(Int)) -> List(Int) {
+  case nums {
+    [] | [_n] -> []
+    nums -> {
+      nums
+      |> list.window_by_2()
+      |> list.map(fn(pair) { pair.1 - pair.0 })
+    }
+  }
+}
+
+fn n_numbers(init num: Int, times n: Int) -> List(Int) {
+  list.range(from: 0, to: n - 1)
+  |> list.fold(from: [num], with: fn(acc, _nth) {
+    let assert [head, ..] = acc
+    [next_n(head), ..acc]
+  })
+  |> list.reverse()
 }
 
 fn nth_number(init num: Int, times n: Int) -> Int {
