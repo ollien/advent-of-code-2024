@@ -8,6 +8,7 @@ import gleam/list
 import gleam/result
 import gleam/string
 import gleam/string_tree
+import rememo/memo
 
 type Direction {
   Up
@@ -38,19 +39,25 @@ fn run(input: String) -> Result(Nil, String) {
     |> string.trim_end()
     |> string.split("\n")
 
-  io.println("Part 1: " <> part1(codes))
+  io.println("Part 1: " <> solve(codes, 2))
+  io.println("Part 2: " <> solve(codes, 25))
   Ok(Nil)
 }
 
-fn part1(codes: List(String)) -> String {
-  case do_part1(codes) {
+fn solve(codes: List(String), num_intermediate_keypads: Int) -> String {
+  case do_solve(codes, num_intermediate_keypads) {
     Ok(solution) -> solution
     Error(err) -> "Failed to solve: " <> err
   }
 }
 
-fn do_part1(codes: List(String)) -> Result(String, String) {
-  use solutions <- result.try(list.try_map(codes, solve_code))
+fn do_solve(
+  codes: List(String),
+  num_intermediate_keypads: Int,
+) -> Result(String, String) {
+  use solutions <- result.try(
+    list.try_map(codes, fn(code) { solve_code(code, num_intermediate_keypads) }),
+  )
 
   solutions
   |> int.sum()
@@ -58,7 +65,10 @@ fn do_part1(codes: List(String)) -> Result(String, String) {
   |> Ok()
 }
 
-fn solve_code(code: String) -> Result(Int, String) {
+fn solve_code(
+  code: String,
+  num_intermediate_keypads: Int,
+) -> Result(Int, String) {
   use numpad_paths <- result.try(make_paths_to_enter(make_numpad(), code))
   use numeric_part <- result.try(
     code
@@ -67,17 +77,16 @@ fn solve_code(code: String) -> Result(Int, String) {
     |> result.map_error(fn(_nil) { "Invalid numeric part of code" }),
   )
 
+  use memo <- memo.create()
+
   list.try_map(numpad_paths, fn(path) {
-    path
-    |> path_to_string()
-    |> string.to_graphemes()
-    |> list.prepend("A")
-    |> list.window_by_2()
-    |> list.try_map(fn(pair) {
-      let #(from, to) = pair
-      make_shortest_path_to_press_key(make_directional_pad(), from, to, 3)
-    })
-    |> result.map(int.sum)
+    shortest_path_length_to_enter(
+      memo,
+      make_directional_pad(),
+      path_to_string(path),
+      // must include our keypad
+      num_intermediate_keypads + 1,
+    )
   })
   |> result.then(fn(lengths) {
     lengths
@@ -85,16 +94,6 @@ fn solve_code(code: String) -> Result(Int, String) {
     |> list.reduce(int.min)
     |> result.map_error(fn(__nil) { "No solutions found" })
   })
-}
-
-fn print_path(path: List(Action)) -> Nil {
-  case path {
-    [] -> io.print("\n")
-    [head, ..rest] -> {
-      io.print(action_to_string(head))
-      print_path(rest)
-    }
-  }
 }
 
 fn path_to_string(path: List(Action)) -> String {
@@ -155,30 +154,25 @@ fn make_paths_to_enter(
   })
 }
 
-fn make_paths_to_enter_times(
+fn shortest_path_length_to_enter(
+  memo,
   keypad: Keypad,
   sequence: String,
-  times: Int,
-) -> Result(List(List(Action)), String) {
-  use <- bool.guard(
-    when: times <= 0,
-    return: Error("Must have at least one iteration of keypress"),
-  )
-
-  use paths <- result.try(make_paths_to_enter(keypad, sequence))
-  io.debug(list.length(paths))
-
-  paths
-  |> list.try_map(fn(path) {
-    case times {
-      1 -> Ok([path])
-      _ -> make_paths_to_enter_times(keypad, path_to_string(path), times - 1)
-    }
+  num_keypads: Int,
+) {
+  sequence
+  |> string.to_graphemes()
+  |> list.prepend("A")
+  |> list.window_by_2()
+  |> list.try_map(fn(pair) {
+    let #(from, to) = pair
+    shortest_path_length_to_press_key(memo, keypad, from, to, num_keypads)
   })
-  |> result.map(list.flatten)
+  |> result.map(int.sum)
 }
 
-fn make_shortest_path_to_press_key(
+fn shortest_path_length_to_press_key(
+  memo,
   keypad keypad: Keypad,
   from start: String,
   to target: String,
@@ -191,6 +185,8 @@ fn make_shortest_path_to_press_key(
 
   use <- bool.guard(when: n == 1, return: Ok(1))
 
+  use <- memo.memoize(memo, #(start, target, n))
+
   use paths <- result.try(make_paths_to_press_key(keypad, start, target))
 
   paths
@@ -202,13 +198,23 @@ fn make_shortest_path_to_press_key(
     |> list.window_by_2()
     |> list.try_map(fn(pair) {
       let #(from, to) = pair
-      make_shortest_path_to_press_key(make_directional_pad(), from, to, n - 1)
+
+      shortest_path_length_to_press_key(
+        memo,
+        make_directional_pad(),
+        from,
+        to,
+        n - 1,
+      )
     })
     |> result.map(int.sum)
   })
-  |> result.then(fn(x) {
-    list.reduce(x, int.min)
-    |> result.map_error(fn(_nil) { "No paths" })
+  |> result.then(fn(lengths) {
+    lengths
+    |> list.reduce(int.min)
+    |> result.map_error(fn(_nil) {
+      "No paths possible from " <> start <> " to " <> target
+    })
   })
 }
 
