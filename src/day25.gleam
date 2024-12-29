@@ -21,7 +21,7 @@ pub fn main() {
 fn run(raw_input: String) -> Result(Nil, String) {
   use input <- result.try(parse_input(raw_input))
   io.println("Part 1: " <> part1(input))
-  io.println("Part 2: Merry Christmas :) ")
+  io.println("Part 2: Merry Christmas :)")
 
   Ok(Nil)
 }
@@ -62,7 +62,7 @@ fn parse_chunk(chunk: String) -> Result(InputChunk, String) {
     |> list.transpose()
   case string.starts_with(chunk, "#####"), string.ends_with(chunk, "#####") {
     True, False ->
-      Ok(Key(
+      Ok(Lock(
         lines
         |> list.map(fn(line) {
           { count_start(line, fn(chr) { chr == "#" }) - 1 }
@@ -70,7 +70,7 @@ fn parse_chunk(chunk: String) -> Result(InputChunk, String) {
       ))
 
     False, True -> {
-      Ok(Lock(
+      Ok(Key(
         lines
         |> list.map(list.reverse)
         |> list.map(fn(line) {
